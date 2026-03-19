@@ -47,6 +47,10 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+
+  --color-flag-card-background: var(--flag-card-background);
+  --color-flag-card-background-lv2: var(--flag-card-background-lv2);
+  --color-flag-card-background-lv3: var(--flag-card-background-lv3);
 }
 
 body {
@@ -93,7 +97,7 @@ body {
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
+  --background: oklch(0.2169 0.0066 258.37);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
   --card-foreground: oklch(0.985 0 0);
@@ -124,6 +128,10 @@ body {
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+
+  --flag-card-background: #1e2024;
+  --flag-card-background-lv2: #26292d;
+  --flag-card-background-lv3: #3b414a;
 }
 
 @layer base {
