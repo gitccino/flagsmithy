@@ -1,8 +1,10 @@
+import { DeleteFlagButton } from "@/components/delete-flag-button";
 import FlagToggle from "@/components/flag-toggle";
 import { Button } from "@/components/ui/button";
 import { db } from "@/lib/db";
 import { flags } from "@/lib/db/schema";
 import { desc } from "drizzle-orm";
+import { Pencil } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -22,7 +24,7 @@ export default async function Home() {
         </div>
         <div>
           <Button size="lg" asChild>
-            <Link href="/new">+ Create Flag</Link>
+            <Link href="/flags/new">+ Create Flag</Link>
           </Button>
         </div>
       </header>
@@ -35,7 +37,12 @@ export default async function Home() {
               <th className="px-6 py-4 text-sm font-semibold">Status</th>
               <th className="px-6 py-4 text-sm font-semibold">Strategy</th>
               <th className="px-6 py-4 text-sm font-semibold">Created</th>
-              <th className="px-6 py-4 text-sm font-semibold">Control</th>
+              <th
+                colSpan={2}
+                className="px-6 py-4 text-sm text-center font-semibold"
+              >
+                Control
+              </th>
             </tr>
           </thead>
 
@@ -98,6 +105,18 @@ export default async function Home() {
                         {flag.isEnabled ? "Active" : "Disabled"}
                       </span>
                     </div>
+                  </td>
+
+                  <td className="px-6 py-4 space-x-1 text-nowrap">
+                    <DeleteFlagButton id={flag.id} />
+                    <Button variant="none" size="lg" asChild>
+                      <Link
+                        href={`/flags/${flag.id}/edit`}
+                        className="bg-flag-card-background-lv3/50 hover:bg-flag-card-background-lv3 transition-colors"
+                      >
+                        <Pencil />
+                      </Link>
+                    </Button>
                   </td>
                 </tr>
               ))

@@ -2,7 +2,7 @@
 
 import { useTransition } from "react";
 import { Button } from "./ui/button";
-import { toggleFlag } from "@/app/actions";
+import { toggleFlag } from "@/app/(admin)/actions";
 
 export default function FlagToggle({
   id,

@@ -51,6 +51,7 @@
   --color-flag-card-background: var(--flag-card-background);
   --color-flag-card-background-lv2: var(--flag-card-background-lv2);
   --color-flag-card-background-lv3: var(--flag-card-background-lv3);
+  --color-flag-muted-foreground: var(--flag-muted-foreground);
 }
 
 body {
@@ -132,6 +133,7 @@ body {
   --flag-card-background: #1e2024;
   --flag-card-background-lv2: #26292d;
   --flag-card-background-lv3: #3b414a;
+  --flag-muted-foreground: #929290;
 }
 
 @layer base {
@@ -144,4 +146,16 @@ body {
   html {
     @apply font-sans;
   }
+}
+
+/* Chrome, Safari, Edge, Opera */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Firefox */
+input[type="number"] {
+  -moz-appearance: textfield;
 }

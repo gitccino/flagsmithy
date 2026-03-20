@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { flags } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 
-export async function getFlag(key: string, userId?: string) {
+export async function evaluateFlag(key: string, userId?: string) {
   const cacheKey = `flag:${key}`;
 
   // 1. Try cache

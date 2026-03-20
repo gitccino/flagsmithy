@@ -1,4 +1,4 @@
-import { createFlag } from "@/app/actions";
+import { createFlag } from "@/app/(admin)/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -31,11 +31,7 @@ export default function NewFlagPage() {
         </div>
 
         <div className="flex gap-4 pt-4">
-          <Button
-            type="submit"
-            size="lg"
-            className="bg-[#2A8DFF] text-white hover:bg-[#1b72f5] transition"
-          >
+          <Button type="submit" size="lg">
             Create Flag
           </Button>
           <Button size="lg" variant="link" asChild>
