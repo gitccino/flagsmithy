@@ -1,33 +1,48 @@
-import { DeleteFlagButton } from "@/components/delete-flag-button";
-import FlagToggle from "@/components/flag-toggle";
-import { Button } from "@/components/ui/button";
-import { db } from "@/lib/db";
-import { flags } from "@/lib/db/schema";
-import { desc } from "drizzle-orm";
-import { Pencil } from "lucide-react";
-import Image from "next/image";
-import Link from "next/link";
+import { DeleteFlagButton } from '@/components/delete-flag-button'
+import { EnvironmentSwitcher } from '@/components/environment-switcher'
+import FlagToggle from '@/components/flag-toggle'
+import { Button } from '@/components/ui/button'
+import { getEnvironmentContext, listFlagsForEnvironment } from '@/lib/flags'
+import { Pencil } from 'lucide-react'
+import Link from 'next/link'
 
-export default async function Home() {
-  // Fetch flags sorted by most recent
-  const allFlags = await db.select().from(flags).orderBy(desc(flags.createdAt));
-  // const allFlags = [];
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ environment?: string }>
+}) {
+  const { environment: requestedEnvironment } = await searchParams
+  const { environments, activeEnvironment } =
+    await getEnvironmentContext(requestedEnvironment)
+  const { flags: allFlags } = await listFlagsForEnvironment(
+    activeEnvironment.key,
+  )
 
   return (
-    <main className="max-w-6xl w-full mx-auto p-8">
-      <header className="flex justify-between items-center mb-8">
+    <main className="max-w-6xl w-full mx-auto p-8 space-y-8">
+      <header className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Feature Flags</h1>
-          <p className="text-gray-500">
+          {/* <p className="text-gray-500">
             Manage your application features in real-time
-          </p>
+          </p> */}
         </div>
-        <div>
+        <div className="flex items-center gap-3">
+          <EnvironmentSwitcher
+            environments={environments}
+            activeEnvironment={activeEnvironment}
+            pathname="/"
+            variant="dropdown"
+          />
           <Button size="lg" asChild>
-            <Link href="/flags/new">+ Create Flag</Link>
+            <Link href={`/flags/new?environment=${activeEnvironment.key}`}>
+              Create New Flag
+            </Link>
           </Button>
         </div>
       </header>
+
+      {/*<DashboardFilters />*/}
 
       <div className="rounded-xl overflow-hidden bg-[#1E2024]">
         <table className="w-full text-left">
@@ -37,6 +52,9 @@ export default async function Home() {
               <th className="px-6 py-4 text-sm font-semibold">Status</th>
               <th className="px-6 py-4 text-sm font-semibold">Strategy</th>
               <th className="px-6 py-4 text-sm font-semibold">Created</th>
+              {/* <th className="px-6 py-4 text-sm font-semibold">
+                Last Evaluated
+              </th> */}
               <th
                 colSpan={2}
                 className="px-6 py-4 text-sm text-center font-semibold"
@@ -50,7 +68,7 @@ export default async function Home() {
             {allFlags.length === 0 ? (
               <tr>
                 <td
-                  colSpan={4}
+                  colSpan={6}
                   className="px-6 py-12 text-center text-gray-500"
                 >
                   No flags found. Create your first flas to get started.
@@ -73,51 +91,58 @@ export default async function Home() {
                     <span
                       className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                         flag.isEnabled
-                          ? "bg-green-100 text-green-800"
-                          : "bg-red-100 text-red-800"
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-red-100 text-red-800'
                       }`}
                     >
-                      {flag.isEnabled ? "Active" : "Disabled"}
+                      {flag.isEnabled ? 'Active' : 'Disabled'}
                     </span>
                   </td>
 
                   <td className="px-6 py-4">
                     <span className="text-sm text-gray-600 capitalize">
-                      {(flag.strategy as any)?.type || "boolean"}
+                      {flag.strategy.type || 'boolean'}
                     </span>
                   </td>
 
                   <td className="px-6 py-4 text-sm text-gray-500">
-                    {flag.createdAt?.toLocaleDateString()}
+                    {flag.createdAt?.toLocaleDateString('en-US')}
                   </td>
 
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <FlagToggle
-                        id={flag.id}
-                        initialValue={flag.isEnabled ?? false}
-                      />
-                      <span
-                        className={`w-16 text-xs font-medium ${
-                          flag.isEnabled ? "text-green-800" : "text-gray-500"
-                        }`}
-                      >
-                        {flag.isEnabled ? "Active" : "Disabled"}
-                      </span>
-                    </div>
-                  </td>
+                  {/* <td className="px-6 py-4 text-sm text-gray-500">
+                    {flag.lastUsedFormatted}
+                  </td> */}
 
-                  <td className="px-6 py-4 space-x-1 text-nowrap">
-                    <DeleteFlagButton id={flag.id} />
-                    <Button variant="none" size="lg" asChild>
-                      <Link
-                        href={`/flags/${flag.id}/edit`}
-                        className="bg-flag-card-background-lv3/50 hover:bg-flag-card-background-lv3 transition-colors"
-                      >
-                        <Pencil />
-                      </Link>
-                    </Button>
-                  </td>
+                  <>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <FlagToggle
+                          id={flag.id}
+                          environmentKey={activeEnvironment.key}
+                          initialValue={flag.isEnabled ?? false}
+                        />
+                        <span
+                          className={`w-16 text-xs font-medium ${
+                            flag.isEnabled ? 'text-green-800' : 'text-gray-500'
+                          }`}
+                        >
+                          {flag.isEnabled ? 'Active' : 'Disabled'}
+                        </span>
+                      </div>
+                    </td>
+
+                    <td className="px-6 py-4 space-x-1 text-nowrap">
+                      <Button variant="none" size="lg" asChild>
+                        <Link
+                          href={`/flags/${flag.id}/edit?environment=${activeEnvironment.key}`}
+                          className="bg-flag-card-background-lv3/50 hover:bg-flag-card-background-lv3 transition-colors"
+                        >
+                          <Pencil />
+                        </Link>
+                      </Button>
+                      <DeleteFlagButton id={flag.id} />
+                    </td>
+                  </>
                 </tr>
               ))
             )}
@@ -125,5 +150,5 @@ export default async function Home() {
         </table>
       </div>
     </main>
-  );
+  )
 }

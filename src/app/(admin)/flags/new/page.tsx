@@ -1,46 +1,31 @@
-import { createFlag } from "@/app/(admin)/actions";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { EnvironmentSwitcher } from '@/components/environment-switcher'
+import { CreateFlagForm } from '@/components/create-flag-form'
+import { getEnvironmentContext } from '@/lib/flags'
 
-export default function NewFlagPage() {
+export default async function NewFlagPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ environment: string }>
+}) {
+  const { environment: requestedEnvironment } = await searchParams
+  const { environments, activeEnvironment } =
+    await getEnvironmentContext(requestedEnvironment)
   return (
-    <main className="max-w-2xl w-full mx-auto p-8">
-      <h1 className="text-2xl font-bold mb-6">Create New Feature Flag</h1>
+    <main className="max-w-6xl w-full mx-auto p-8">
+      <div className="flex flex-col items-start mb-6">
+        <h1 className="text-2xl font-bold mb-6">Create New Feature Flag</h1>
+        <EnvironmentSwitcher
+          environments={environments}
+          activeEnvironment={activeEnvironment}
+          pathname="/flags/new"
+        />
+      </div>
 
-      <form action={createFlag} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium mb-1">
-            Flag Key (Unique)
-          </label>
-          <Input
-            name="key"
-            placeholder="e.g., enable-new-checkout"
-            className="w-full border p-2 rounded-md font-mono"
-            required
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1">Description</label>
-          <Textarea
-            name="description"
-            placeholder="What does this feature do?"
-            className="w-full border p-2 rounded-md"
-          />
-        </div>
-
-        <div className="flex gap-4 pt-4">
-          <Button type="submit" size="lg">
-            Create Flag
-          </Button>
-          <Button size="lg" variant="link" asChild>
-            <a href="/" className="text-gray-600">
-              Cancel
-            </a>
-          </Button>
-        </div>
-      </form>
+      <CreateFlagForm
+        environmentKey={activeEnvironment.key}
+        activeEnvironmentName={activeEnvironment.name}
+        cancelHref={`/?environment=${activeEnvironment.key}`}
+      />
     </main>
-  );
+  )
 }

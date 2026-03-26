@@ -4,31 +4,27 @@ import { cn } from '@/lib/utils'
 import { Button } from './ui/button'
 import { useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { deleteFlag } from '@/app/(admin)/actions'
+import { deleteSegment } from '@/app/(admin)/actions'
 import { runActionWithToast } from '@/lib/action-toast'
 import { Loader, Trash2 } from 'lucide-react'
 
-type DeleteFlagButtonProps = {
-  id: string
+type DeleteSegmentButtonProps = {
+  segmentId: string
 }
 
-export function DeleteFlagButton({
-  id,
+export function DeleteSegmentButton({
+  segmentId,
   className,
-}: DeleteFlagButtonProps & React.ComponentProps<'button'>) {
+}: DeleteSegmentButtonProps & React.ComponentProps<'button'>) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
-  const handleDeleteFlag = () => {
-    if (
-      confirm(
-        'Are you sure? This will immediately disable the feature for all users.',
-      )
-    ) {
+  const handleDelete = () => {
+    if (confirm('Delete this segment and all targeting rules that use it?')) {
       startTransition(async () => {
-        const response = await runActionWithToast(deleteFlag(id), {
-          loading: 'Deleting flag...',
-          success: (result) => result.message ?? 'Flag deleted',
+        const response = await runActionWithToast(deleteSegment(segmentId), {
+          loading: 'Deleting segment...',
+          success: (result) => result.message ?? 'Segment deleted',
           error: (result) => result.message,
         })
 
@@ -44,8 +40,8 @@ export function DeleteFlagButton({
       disabled={isPending}
       variant="destructive"
       size="lg"
-      className={cn('cursor-pointer', className)}
-      onClick={handleDeleteFlag}
+      className={cn('', className)}
+      onClick={handleDelete}
     >
       {isPending ? <Loader className="animate-spin" /> : <Trash2 />}
     </Button>

@@ -1,10 +1,11 @@
-"use client";
+'use client'
 
-import * as React from "react";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import InputToggle from "@/components/input-toggle";
+import { type FormEvent, useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
+import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import InputToggle from '@/components/input-toggle'
 import {
   Select,
   SelectContent,
@@ -12,35 +13,46 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import Link from "next/link";
-import PercentageInput from "@/components/percentage-input";
-import { cn } from "@/lib/utils";
-import { updateFlag } from "@/app/(admin)/actions";
-import type { SelectFlag } from "@/types";
+} from '@/components/ui/select'
+import Link from 'next/link'
+import PercentageInput from '@/components/percentage-input'
+import { cn } from '@/lib/utils'
+import { updateFlag } from '@/app/(admin)/actions'
+import { runActionWithToast } from '@/lib/action-toast'
+import type { SelectAdminFlag } from '@/types'
 
 interface EditFlagFormProps {
-  flag: SelectFlag;
+  flag: SelectAdminFlag
 }
 
 export default function EditFlagForm({ flag }: EditFlagFormProps) {
-  const strategy = flag.strategy as { type: string; value?: number };
-  const [strategyType, setStrategyType] = React.useState(strategy.type);
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
+  const strategy = flag.strategy
+  const [strategyType, setStrategyType] = useState(strategy.type)
+  const strategyValue = strategy.type === 'percentage' ? strategy.value : 0
 
-  // const handleSubmit = (e: React.SubmitEvent<HTMLFormElement>) => {
-  //   e.preventDefault();
-  //   const formData = new FormData(e.currentTarget);
-  //   // Get all values and log them out
-  //   const values: Record<string, any> = Object.fromEntries(formData.entries());
-  //   // Also include checkbox manually as standard FormData.get() only gets 'on' for checked checkboxes
-  //   values.isEnabled = formData.has("isEnabled");
-  //   console.table(values);
-  // };
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const formData = new FormData(event.currentTarget)
+    startTransition(async () => {
+      const response = await runActionWithToast(
+        updateFlag(flag.id, flag.environmentKey, formData),
+        {
+          loading: 'Saving changes...',
+          success: (result) => result.message ?? 'Flag updated',
+          error: (result) => result.message,
+        },
+      )
 
-  const updateFlagWithId = updateFlag.bind(null, flag.id);
+      if (response.ok) {
+        router.refresh()
+      }
+    })
+  }
 
   return (
-    <form action={updateFlagWithId} className="space-y-6">
+    <form onSubmit={handleSubmit} className="space-y-6">
       <div>
         <Label htmlFor="description" className="mb-2 block">
           Description
@@ -48,7 +60,7 @@ export default function EditFlagForm({ flag }: EditFlagFormProps) {
         <Textarea
           id="description"
           name="description"
-          defaultValue={flag.description ?? ""}
+          defaultValue={flag.description ?? ''}
         />
       </div>
 
@@ -77,10 +89,12 @@ export default function EditFlagForm({ flag }: EditFlagFormProps) {
             <Select
               name="strategyType"
               value={strategyType}
-              onValueChange={setStrategyType}
+              onValueChange={(value) =>
+                setStrategyType(value as typeof strategy.type)
+              }
             >
               <SelectTrigger id="strategyType" className="w-full">
-                <SelectValue placeholder="Theme" />
+                <SelectValue placeholder="e.g., Boolean (Global)" />
               </SelectTrigger>
               <SelectContent className="ring-[#2e3033]">
                 <SelectGroup>
@@ -95,7 +109,7 @@ export default function EditFlagForm({ flag }: EditFlagFormProps) {
             </Select>
           </div>
 
-          <div className={cn(strategyType !== "percentage" && "sr-only")}>
+          <div className={cn(strategyType !== 'percentage' && 'sr-only')}>
             <Label
               htmlFor="strategyValue"
               className="block text-sm font-medium mb-1"
@@ -105,7 +119,7 @@ export default function EditFlagForm({ flag }: EditFlagFormProps) {
             <PercentageInput
               id="strategyValue"
               name="strategyValue"
-              defaultValue={strategy.value ?? 0}
+              defaultValue={strategyValue}
               min="0"
               max="100"
             />
@@ -117,13 +131,13 @@ export default function EditFlagForm({ flag }: EditFlagFormProps) {
       </div>
 
       <div className="flex gap-4">
-        <Button type="submit" size="lg">
+        <Button type="submit" size="lg" disabled={isPending}>
           Save Changes
         </Button>
         <Button variant="link" asChild>
-          <Link href="/">Cancel</Link>
+          <Link href={`/?environment=${flag.environmentKey}`}>Cancel</Link>
         </Button>
       </div>
     </form>
-  );
+  )
 }
