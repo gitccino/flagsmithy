@@ -1,46 +1,146 @@
-import { redis } from "@/lib/redis";
-import { db } from "@/lib/db";
-import { flags } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { redis } from '@/lib/redis'
+import { db } from '@/lib/db'
+import {
+  environments,
+  flagEnvironments,
+  flags,
+  FlagStrategy,
+} from '@/lib/db/schema'
+import { eq, and } from 'drizzle-orm'
+import { DEFAULT_ENVIRONMENT_KEY, getFlagCacheKey } from '@/lib/flags'
+import {
+  evaluateRuleOutcome,
+  listRulesForFlagEnvironment,
+  matchesSegment,
+  TraitMap,
+} from '../segments'
 
-export async function evaluateFlag(key: string, userId?: string) {
-  const cacheKey = `flag:${key}`;
+/**
+ * - Rewrite evaluateFlag
+ */
 
-  // 1. Try cache
-  let flag = await redis.get(cacheKey);
+type EvaluateFlagInput =
+  | string
+  | {
+      flagKey: string
+      environmentKey?: string
+      userId?: string
+      traits?: TraitMap
+    }
 
-  // 2. Cache not found -> Database
-  if (!flag) {
-    const result = await db.query.flags.findFirst({
-      where: eq(flags.key, key),
-    });
+type CachedFlagState = {
+  id: string
+  isEnabled: boolean
+  strategy: FlagStrategy
+}
 
-    if (!result) return false;
-    flag = result;
-
-    await redis.set(cacheKey, JSON.stringify(flag), { ex: 60 });
+function normalizeStrategy(strategy: unknown): FlagStrategy {
+  if (
+    strategy &&
+    typeof strategy === 'object' &&
+    (strategy as { type?: string }).type === 'percentage' &&
+    typeof (strategy as { value?: unknown }).value === 'number'
+  ) {
+    return {
+      type: 'percentage',
+      value: (strategy as { value: number }).value,
+    }
   }
 
-  const { isEnabled, strategy } = flag as any;
+  return { type: 'boolean' }
+}
+
+export async function evaluateFlag(
+  input: EvaluateFlagInput,
+  legacyUserId?: string,
+) {
+  const payload =
+    typeof input === 'string'
+      ? {
+          flagKey: input,
+          environmentKey: DEFAULT_ENVIRONMENT_KEY,
+          userId: legacyUserId,
+          traits: undefined,
+        }
+      : {
+          flagKey: input.flagKey,
+          environmentKey: input.environmentKey ?? DEFAULT_ENVIRONMENT_KEY,
+          userId: input.userId,
+          traits: input.traits,
+        }
+  const cacheKey = getFlagCacheKey(payload.environmentKey, payload.flagKey)
+  let flag = await redis.get<CachedFlagState>(cacheKey)
+
+  // Cache not found -> Database
+  if (!flag) {
+    const result = await db
+      .select({
+        id: flagEnvironments.id,
+        isEnabled: flagEnvironments.isEnabled,
+        strategy: flagEnvironments.strategy,
+      })
+      .from(flags)
+      .innerJoin(flagEnvironments, eq(flagEnvironments.flagId, flags.id))
+      .innerJoin(
+        environments,
+        eq(flagEnvironments.environmentId, environments.id),
+      )
+      .where(
+        and(
+          eq(flags.key, payload.flagKey),
+          eq(environments.key, payload.environmentKey),
+          eq(flags.projectId, environments.projectId),
+        ),
+      )
+      .limit(1)
+
+    if (!result[0]) {
+      return false
+    }
+
+    flag = {
+      id: result[0].id,
+      isEnabled: result[0].isEnabled,
+      strategy: normalizeStrategy(result[0].strategy),
+    }
+
+    await redis.set(cacheKey, flag, { ex: 60 })
+  }
+
+  const { isEnabled, strategy } = flag
 
   // 3. Global Kill-switch check
-  if (!isEnabled) return false;
+  if (!isEnabled) return false
 
   // 4. Strategy Logic
-  if (strategy.type === "boolean") return true;
+  const rules = await listRulesForFlagEnvironment(flag.id)
 
-  if (strategy.type === "percentage" && userId) {
-    // Deterministic hashing for consistent rollouts
-    const hash = await hashString(userId + key);
-    return hash % 100 < strategy.value;
+  for (const rule of rules) {
+    if (!matchesSegment(rule.segment, payload.traits)) continue
+    return evaluateRuleOutcome(
+      rule.outcomeType,
+      payload.flagKey,
+      payload.userId,
+      rule.percentageValue,
+    )
   }
+
+  if (strategy.type === 'boolean') return true
+
+  if (strategy.type === 'percentage' && payload.userId) {
+    // Deterministic hashing for consistent rollouts
+    const hash = await hashString(payload.userId + payload.flagKey)
+    return hash % 100 < strategy.value
+  }
+
+  return false
 }
 
 async function hashString(str: string) {
-  let hash = 0;
+  let hash = 0
   for (let i = 0; i < str.length; i++) {
-    hash = (hash << 5) - hash + str.charCodeAt(i);
-    hash |= 0;
+    hash = (hash << 5) - hash + str.charCodeAt(i)
+    hash |= 0
   }
-  return Math.abs(hash);
+  return Math.abs(hash)
 }
