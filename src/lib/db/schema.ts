@@ -1,5 +1,6 @@
 import {
   boolean,
+  index,
   integer,
   jsonb,
   pgTable,
@@ -262,25 +263,68 @@ export const apiKeys = pgTable('api_keys', {
 /** One row per admin action — who did what to which resource and when.
  *  Used to display the audit trail on the settings page.
  */
-export const auditLogs = pgTable('audit_logs', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  projectId: uuid('project_id')
-    .notNull()
-    .references(() => projects.id, { onDelete: 'cascade' }),
-  // The admin user who performed the action (nullable for future system events)
-  userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
-  // Dot-namespaced action constant, e.g. "flag.created", "segment.deleted"
-  action: text('action').notNull(),
-  // The type of thing that was acted on: "flag", "segment", "api_key", etc.
-  resourceType: text('resource_type').notNull(),
-  // The database ID of the resource
-  resourceId: text('resource_id').notNull(),
-  // Human-readable identifier for display (flag key, segment name, key name…)
-  resourceKey: text('resource_key'),
-  // Optional extra context stored as JSON (e.g. old/new values, environment)
-  metadata: jsonb('metadata'),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-})
+export const auditLogs = pgTable(
+  'audit_logs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    environmentId: uuid('environment_id').references(() => environments.id, {
+      onDelete: 'set null',
+    }),
+    // Snapshot value of the environment key at write-time for resilient filtering/reporting.
+    environmentKey: text('environment_key'),
+    // Scope of mutation: either project-wide or specific to an environment.
+    scope: text('scope').notNull().default('project'),
+    // The admin user who performed the action (nullable for system events)
+    userId: text('user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    // Normalized actor context (user/system/api_key)
+    actorType: text('actor_type').notNull().default('user'),
+    actorId: text('actor_id'),
+    // Dot-namespaced action constant, e.g. "flag.created", "segment.deleted"
+    action: text('action').notNull(),
+    // Event status: success, denied, failed
+    status: text('status').notNull().default('success'),
+    // The type of thing that was acted on: "flag", "segment", "api_key", etc.
+    resourceType: text('resource_type').notNull(),
+    // The database ID of the resource
+    resourceId: text('resource_id').notNull(),
+    // Human-readable identifier for display (flag key, segment name, key name…)
+    resourceKey: text('resource_key'),
+    requestId: text('request_id'),
+    ipAddress: text('ip_address'),
+    userAgent: text('user_agent'),
+    // Structured before/after diffs where available.
+    changes: jsonb('changes'),
+    // Optional extra context stored as JSON (for non-standard data).
+    metadata: jsonb('metadata'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (table) => [
+    // Fast for “show latest audit events for a project.
+    index('audit_logs_project_id_created_at_idx').on(
+      table.projectId,
+      table.createdAt,
+    ),
+    // Fast for “show latest events in project X, environment Y.
+    index('audit_logs_project_id_environment_key_created_at_idx').on(
+      table.projectId,
+      table.environmentKey,
+      table.createdAt,
+    ),
+    // Fast for filtering by action type inside a project (like only `flag.updated`).
+    index('audit_logs_project_id_action_created_at_idx').on(
+      table.projectId,
+      table.action,
+      table.createdAt,
+    ),
+    // Fast lookup for one request trace across logs/audit.
+    index('audit_logs_request_id_idx').on(table.requestId),
+  ],
+)
 
 // ─── Authorization ──────────────────────────────────────────────────────────
 
