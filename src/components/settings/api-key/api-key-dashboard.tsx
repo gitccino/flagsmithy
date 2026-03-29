@@ -6,9 +6,13 @@ import { CreateApiKeyForm } from './create-api-key-form'
 
 type ApiKeyDashboardProps = {
   environmentId: string
+  environmentKey: string
 }
 
-export async function ApiKeyDashboard({ environmentId }: ApiKeyDashboardProps) {
+export async function ApiKeyDashboard({
+  environmentId,
+  environmentKey,
+}: ApiKeyDashboardProps) {
   const keys = await db
     .select({
       id: apiKeys.id,
@@ -30,7 +34,7 @@ export async function ApiKeyDashboard({ environmentId }: ApiKeyDashboardProps) {
             Used by your SDK clients to authenticate flag evaluation requests.
           </p>
         </div>
-        <CreateApiKeyForm />
+        <CreateApiKeyForm environmentKey={environmentKey} />
       </div>
 
       <table className="w-full">
@@ -99,7 +103,10 @@ export async function ApiKeyDashboard({ environmentId }: ApiKeyDashboardProps) {
                     : 'Never used'}
                 </td>
                 <td className="text-right">
-                  <DeleteApiKeyButton id={k.id} />
+                  <DeleteApiKeyButton
+                    id={k.id}
+                    environmentKey={environmentKey}
+                  />
                 </td>
               </tr>
             ))

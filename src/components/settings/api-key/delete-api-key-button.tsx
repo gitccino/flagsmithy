@@ -13,7 +13,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 
-export function DeleteApiKeyButton({ id }: { id: string }) {
+export function DeleteApiKeyButton({
+  id,
+  environmentKey,
+}: {
+  id: string
+  environmentKey: string
+}) {
   const [isPending, startTransition] = useTransition()
 
   const handleDelete = () => {
@@ -25,7 +31,7 @@ export function DeleteApiKeyButton({ id }: { id: string }) {
       return
 
     startTransition(async () => {
-      await runActionWithToast(deleteApiKey(id), {
+      await runActionWithToast(deleteApiKey(id, environmentKey), {
         loading: 'Deleting key…',
         success: (r) => r.message ?? 'Key deleted',
         error: (r) => r.message,

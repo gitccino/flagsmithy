@@ -3,7 +3,7 @@
 import { db } from '@/lib/db'
 import { apiKeys, environments } from '@/lib/db/schema'
 import { generateApiKey, getKeyPrefix, hashApiKey } from '@/lib/api-keys'
-import { getEnvironmentContext } from '@/lib/flags'
+import { DEFAULT_ENVIRONMENT_KEY, getEnvironmentContext } from '@/lib/flags'
 import { auth, type Session } from '@/lib/auth'
 import { headers } from 'next/headers'
 import { and, eq } from 'drizzle-orm'
@@ -43,9 +43,12 @@ export async function createApiKey(
   try {
     const auditContext = await getAuditContext(session)
     const name = ((formData.get('name') as string) ?? '').trim()
+    const environmentKey = (
+      (formData.get('environmentKey') as string) || DEFAULT_ENVIRONMENT_KEY
+    ).trim()
     if (!name) return { ok: false, message: 'Name is required' }
 
-    const { activeEnvironment } = await getEnvironmentContext()
+    const { activeEnvironment } = await getEnvironmentContext(environmentKey)
 
     const rawKey = generateApiKey()
     const [key] = await db
@@ -84,13 +87,16 @@ export async function createApiKey(
   }
 }
 
-export async function deleteApiKey(id: string): Promise<ActionResponse> {
+export async function deleteApiKey(
+  id: string,
+  environmentKey = DEFAULT_ENVIRONMENT_KEY,
+): Promise<ActionResponse> {
   const session = await requireSession()
   if ('ok' in session) return session
 
   try {
     const auditContext = await getAuditContext(session)
-    const { activeEnvironment } = await getEnvironmentContext()
+    const { activeEnvironment } = await getEnvironmentContext(environmentKey)
 
     // Capture key info before deletion — join to environments to get projectId for audit log.
     // The environmentId check also enforces ownership: you can only delete keys in your active environment.
