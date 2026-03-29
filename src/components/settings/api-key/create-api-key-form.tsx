@@ -1,6 +1,6 @@
 'use client'
 
-import { useTransition, useState, useEffect } from 'react'
+import { useTransition, useState } from 'react'
 import { createApiKey } from '@/app/(admin)/settings/actions'
 import { runActionWithToast } from '@/lib/action-toast'
 import { Button } from '@/components/ui/button'
@@ -18,7 +18,11 @@ import {
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
 
-export function CreateApiKeyForm() {
+export function CreateApiKeyForm({
+  environmentKey,
+}: {
+  environmentKey: string
+}) {
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [revealedKey, setRevealedKey] = useState<string | null>(null)
@@ -118,6 +122,11 @@ export function CreateApiKeyForm() {
                 </DialogDescription>
               </DialogHeader>
               <div className="flex flex-col gap-3">
+                <input
+                  type="hidden"
+                  name="environmentKey"
+                  value={environmentKey}
+                />
                 <Label htmlFor="name" className="text-muted-foreground">
                   Name your key:
                 </Label>

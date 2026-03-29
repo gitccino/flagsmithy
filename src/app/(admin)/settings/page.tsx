@@ -71,7 +71,10 @@ export default async function SettingsPage({
         </div>
       </section>
 
-      <ApiKeyDashboard environmentId={activeEnvironment.id} />
+      <ApiKeyDashboard
+        environmentId={activeEnvironment.id}
+        environmentKey={activeEnvironment.key}
+      />
 
       {/* Audit Log */}
       <section className="space-y-3 border p-6 rounded-xl">

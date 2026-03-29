@@ -35,19 +35,33 @@ import {
   RULE_OUTCOME_TYPES,
   type RuleOutcomeType,
 } from '@/lib/constants/rule-outcome'
-import { auth } from '@/lib/auth'
+import { auth, type Session } from '@/lib/auth'
 import { headers } from 'next/headers'
-import { logAuditEvent } from '@/lib/audit-logs'
+import { logAuditEventV2 } from '@/lib/audit-logs'
 import { AUDIT_ACTIONS } from '@/lib/constants/audit-actions'
+import {
+  resolveAuditActorContext,
+  resolveAuditRequestContext,
+} from '@/lib/audit/context'
 
 // Returns the session on success, or an ActionResponse error on failure.
 // All actions call this first and return early if it's an error.
 async function requireSession() {
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session) {
-    return { ok: false as const, code: 'UNAUTHORIZED', message: 'Sign in to continue' }
+    return {
+      ok: false as const,
+      code: 'UNAUTHORIZED',
+      message: 'Sign in to continue',
+    }
   }
   return session
+}
+
+async function getAuditContext(session: Session) {
+  const [requestContext] = await Promise.all([resolveAuditRequestContext()])
+  const actorContext = resolveAuditActorContext(session)
+  return { ...actorContext, ...requestContext }
 }
 
 type ConditionValueType = 'string' | 'number' | 'boolean'
@@ -204,6 +218,7 @@ export async function createFlag(
   const session = await requireSession()
   if ('ok' in session) return session
   try {
+    const auditContext = await getAuditContext(session)
     const key = (formData.get('key') as string).trim()
     const description = (formData.get('description') as string).trim()
     const environmentKey = (
@@ -229,14 +244,20 @@ export async function createFlag(
       strategy: { type: 'boolean' },
     })
 
-    await logAuditEvent({
+    await logAuditEventV2({
       projectId: activeEnvironment.projectId,
-      userId: session.user.id,
+      scope: 'environment',
+      environmentId: activeEnvironment.id,
+      environmentKey: activeEnvironment.key,
+      ...auditContext,
       action: AUDIT_ACTIONS.FLAG_CREATED,
       resourceType: 'flag',
       resourceId: flag.id,
       resourceKey: flag.key,
-      metadata: { description: description || null, environment: environmentKey },
+      metadata: {
+        description: description || null,
+        environment: environmentKey,
+      },
     })
 
     revalidatePath('/')
@@ -246,7 +267,11 @@ export async function createFlag(
       data: { redirectUrl: getEnvironmentRedirect(activeEnvironment.key) },
     }
   } catch {
-    return { ok: false, code: 'INTERNAL_SERVER_ERROR', message: 'Failed to create flag' }
+    return {
+      ok: false,
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Failed to create flag',
+    }
   }
 }
 
@@ -257,10 +282,12 @@ export async function toggleFlag(
   const session = await requireSession()
   if ('ok' in session) return session
   try {
+    const auditContext = await getAuditContext(session)
     const { activeEnvironment } = await getEnvironmentContext(environmentKey)
     const flag = await getFlagDefinition(id)
 
-    if (!flag) return { ok: false, code: 'NOT_FOUND', message: 'Flag not found' }
+    if (!flag)
+      return { ok: false, code: 'NOT_FOUND', message: 'Flag not found' }
 
     await db
       .insert(flagEnvironments)
@@ -272,12 +299,18 @@ export async function toggleFlag(
       })
       .onConflictDoUpdate({
         target: [flagEnvironments.flagId, flagEnvironments.environmentId],
-        set: { isEnabled: not(flagEnvironments.isEnabled), updatedAt: new Date() },
+        set: {
+          isEnabled: not(flagEnvironments.isEnabled),
+          updatedAt: new Date(),
+        },
       })
 
-    await logAuditEvent({
+    await logAuditEventV2({
       projectId: activeEnvironment.projectId,
-      userId: session.user.id,
+      scope: 'environment',
+      environmentId: activeEnvironment.id,
+      environmentKey: activeEnvironment.key,
+      ...auditContext,
       action: AUDIT_ACTIONS.FLAG_TOGGLED,
       resourceType: 'flag',
       resourceId: id,
@@ -289,7 +322,11 @@ export async function toggleFlag(
     revalidatePath('/')
     return { ok: true, message: 'Flag toggled' }
   } catch {
-    return { ok: false, code: 'INTERNAL_SERVER_ERROR', message: 'Failed to toggle flag' }
+    return {
+      ok: false,
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Failed to toggle flag',
+    }
   }
 }
 
@@ -297,16 +334,19 @@ export async function deleteFlag(id: string): Promise<ActionResponse> {
   const session = await requireSession()
   if ('ok' in session) return session
   try {
+    const auditContext = await getAuditContext(session)
     // Capture flag info before deletion for audit log
     const flag = await getFlagDefinition(id)
-    if (!flag) return { ok: false, code: 'NOT_FOUND', message: 'Flag not found' }
+    if (!flag)
+      return { ok: false, code: 'NOT_FOUND', message: 'Flag not found' }
 
     await invalidateFlagCachesForFlag(id)
     await db.delete(flags).where(eq(flags.id, id))
 
-    await logAuditEvent({
+    await logAuditEventV2({
       projectId: flag.projectId,
-      userId: session.user.id,
+      scope: 'project',
+      ...auditContext,
       action: AUDIT_ACTIONS.FLAG_DELETED,
       resourceType: 'flag',
       resourceId: id,
@@ -316,7 +356,11 @@ export async function deleteFlag(id: string): Promise<ActionResponse> {
     revalidatePath('/')
     return { ok: true, message: 'Flag deleted' }
   } catch {
-    return { ok: false, code: 'INTERNAL_SERVER_ERROR', message: 'Failed to delete flag' }
+    return {
+      ok: false,
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Failed to delete flag',
+    }
   }
 }
 
@@ -326,11 +370,14 @@ export async function createSegment(
   const session = await requireSession()
   if ('ok' in session) return session
   try {
+    const auditContext = await getAuditContext(session)
     const name = ((formData.get('name') as string) || '').trim()
     const rawDescription = formData.get('description')
     const description =
       typeof rawDescription === 'string' ? rawDescription.trim() : ''
-    const { activeEnvironment } = await getEnvironmentContext(DEFAULT_ENVIRONMENT_KEY)
+    const { activeEnvironment } = await getEnvironmentContext(
+      DEFAULT_ENVIRONMENT_KEY,
+    )
 
     const [segment] = await db
       .insert(segments)
@@ -338,9 +385,10 @@ export async function createSegment(
       .returning({ id: segments.id, name: segments.name })
 
     if (segment) {
-      await logAuditEvent({
+      await logAuditEventV2({
         projectId: activeEnvironment.projectId,
-        userId: session.user.id,
+        scope: 'project',
+        ...auditContext,
         action: AUDIT_ACTIONS.SEGMENT_CREATED,
         resourceType: 'segment',
         resourceId: segment.id,
@@ -352,7 +400,11 @@ export async function createSegment(
     revalidatePath('/segments')
     return { ok: true, message: 'Segment created' }
   } catch {
-    return { ok: false, code: 'INTERNAL_SERVER_ERROR', message: 'Failed to create segment' }
+    return {
+      ok: false,
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Failed to create segment',
+    }
   }
 }
 
@@ -368,8 +420,10 @@ export async function updateSegment(
   const session = await requireSession()
   if ('ok' in session) return session
   try {
+    const auditContext = await getAuditContext(session)
     const segment = await getSegmentById(segmentId)
-    if (!segment) return { ok: false, code: 'NOT_FOUND', message: 'Segment not found' }
+    if (!segment)
+      return { ok: false, code: 'NOT_FOUND', message: 'Segment not found' }
 
     const name = getStringFromFormData(formData, 'name')
     const description = getStringFromFormData(formData, 'description')
@@ -379,9 +433,10 @@ export async function updateSegment(
       .set({ name, description: description || null, updatedAt: new Date() })
       .where(eq(segments.id, segmentId))
 
-    await logAuditEvent({
+    await logAuditEventV2({
       projectId: segment.projectId,
-      userId: session.user.id,
+      scope: 'project',
+      ...auditContext,
       action: AUDIT_ACTIONS.SEGMENT_UPDATED,
       resourceType: 'segment',
       resourceId: segmentId,
@@ -394,23 +449,32 @@ export async function updateSegment(
     revalidatePath(getSegmentEditRedirect(segmentId))
     return { ok: true, message: 'Segment updated' }
   } catch {
-    return { ok: false, code: 'INTERNAL_SERVER_ERROR', message: 'Failed to update segment' }
+    return {
+      ok: false,
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Failed to update segment',
+    }
   }
 }
 
-export async function deleteSegment(segmentId: string): Promise<ActionResponse> {
+export async function deleteSegment(
+  segmentId: string,
+): Promise<ActionResponse> {
   const session = await requireSession()
   if ('ok' in session) return session
   try {
+    const auditContext = await getAuditContext(session)
     const segment = await getSegmentById(segmentId)
-    if (!segment) return { ok: false, code: 'NOT_FOUND', message: 'Segment not found' }
+    if (!segment)
+      return { ok: false, code: 'NOT_FOUND', message: 'Segment not found' }
 
     await invalidateFlagCachesForSegment(segmentId)
     await db.delete(segments).where(eq(segments.id, segmentId))
 
-    await logAuditEvent({
+    await logAuditEventV2({
       projectId: segment.projectId,
-      userId: session.user.id,
+      scope: 'project',
+      ...auditContext,
       action: AUDIT_ACTIONS.SEGMENT_DELETED,
       resourceType: 'segment',
       resourceId: segmentId,
@@ -420,7 +484,11 @@ export async function deleteSegment(segmentId: string): Promise<ActionResponse> 
     revalidatePath('/segments')
     return { ok: true, message: 'Segment deleted' }
   } catch {
-    return { ok: false, code: 'INTERNAL_SERVER_ERROR', message: 'Failed to delete segment' }
+    return {
+      ok: false,
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Failed to delete segment',
+    }
   }
 }
 
@@ -431,8 +499,10 @@ export async function createSegmentCondition(
   const session = await requireSession()
   if ('ok' in session) return session
   try {
+    const auditContext = await getAuditContext(session)
     const segment = await getSegmentById(segmentId)
-    if (!segment) return { ok: false, code: 'NOT_FOUND', message: 'Segment not found' }
+    if (!segment)
+      return { ok: false, code: 'NOT_FOUND', message: 'Segment not found' }
 
     const payload = getSegmentConditionPayload(formData)
     const [condition] = await db
@@ -441,9 +511,10 @@ export async function createSegmentCondition(
       .returning({ id: segmentConditions.id })
 
     if (condition) {
-      await logAuditEvent({
+      await logAuditEventV2({
         projectId: segment.projectId,
-        userId: session.user.id,
+        scope: 'project',
+        ...auditContext,
         action: AUDIT_ACTIONS.SEGMENT_CONDITION_CREATED,
         resourceType: 'segment_condition',
         resourceId: condition.id,
@@ -457,7 +528,11 @@ export async function createSegmentCondition(
     revalidatePath(getSegmentEditRedirect(segmentId))
     return { ok: true, message: 'Condition created' }
   } catch {
-    return { ok: false, code: 'INTERNAL_SERVER_ERROR', message: 'Failed to create condition' }
+    return {
+      ok: false,
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Failed to create condition',
+    }
   }
 }
 
@@ -469,8 +544,10 @@ export async function updateSegmentCondition(
   const session = await requireSession()
   if ('ok' in session) return session
   try {
+    const auditContext = await getAuditContext(session)
     const segment = await getSegmentById(segmentId)
-    if (!segment) return { ok: false, code: 'NOT_FOUND', message: 'Segment not found' }
+    if (!segment)
+      return { ok: false, code: 'NOT_FOUND', message: 'Segment not found' }
 
     const payload = getSegmentConditionPayload(formData)
     await db
@@ -483,9 +560,10 @@ export async function updateSegmentCondition(
         ),
       )
 
-    await logAuditEvent({
+    await logAuditEventV2({
       projectId: segment.projectId,
-      userId: session.user.id,
+      scope: 'project',
+      ...auditContext,
       action: AUDIT_ACTIONS.SEGMENT_CONDITION_UPDATED,
       resourceType: 'segment_condition',
       resourceId: conditionId,
@@ -498,7 +576,11 @@ export async function updateSegmentCondition(
     revalidatePath(getSegmentEditRedirect(segmentId))
     return { ok: true, message: 'Condition updated' }
   } catch {
-    return { ok: false, code: 'INTERNAL_SERVER_ERROR', message: 'Failed to update condition' }
+    return {
+      ok: false,
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Failed to update condition',
+    }
   }
 }
 
@@ -509,8 +591,10 @@ export async function deleteSegmentCondition(
   const session = await requireSession()
   if ('ok' in session) return session
   try {
+    const auditContext = await getAuditContext(session)
     const segment = await getSegmentById(segmentId)
-    if (!segment) return { ok: false, code: 'NOT_FOUND', message: 'Segment not found' }
+    if (!segment)
+      return { ok: false, code: 'NOT_FOUND', message: 'Segment not found' }
 
     await db
       .delete(segmentConditions)
@@ -521,9 +605,10 @@ export async function deleteSegmentCondition(
         ),
       )
 
-    await logAuditEvent({
+    await logAuditEventV2({
       projectId: segment.projectId,
-      userId: session.user.id,
+      scope: 'project',
+      ...auditContext,
       action: AUDIT_ACTIONS.SEGMENT_CONDITION_DELETED,
       resourceType: 'segment_condition',
       resourceId: conditionId,
@@ -535,7 +620,11 @@ export async function deleteSegmentCondition(
     revalidatePath(getSegmentEditRedirect(segmentId))
     return { ok: true, message: 'Condition deleted' }
   } catch {
-    return { ok: false, code: 'INTERNAL_SERVER_ERROR', message: 'Failed to delete condition' }
+    return {
+      ok: false,
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Failed to delete condition',
+    }
   }
 }
 
@@ -547,17 +636,29 @@ export async function createFlagEnvironmentRule(
   const session = await requireSession()
   if ('ok' in session) return session
   try {
+    const auditContext = await getAuditContext(session)
     const { activeEnvironment } = await getEnvironmentContext(environmentKey)
     const flag = await getFlagDefinition(flagId)
 
     if (!flag || flag.projectId !== activeEnvironment.projectId)
-      return { ok: false, code: 'NOT_FOUND', message: 'The selected flag was not found' }
+      return {
+        ok: false,
+        code: 'NOT_FOUND',
+        message: 'The selected flag was not found',
+      }
 
     const payload = getRulePayload(formData)
-    const segment = await getSegmentForProject(payload.segmentId, activeEnvironment.projectId)
+    const segment = await getSegmentForProject(
+      payload.segmentId,
+      activeEnvironment.projectId,
+    )
 
     if (!segment)
-      return { ok: false, code: 'NOT_FOUND', message: 'The selected segment was not found' }
+      return {
+        ok: false,
+        code: 'NOT_FOUND',
+        message: 'The selected segment was not found',
+      }
 
     const state = await ensureFlagEnvironmentState(flagId, activeEnvironment.id)
     const [rule] = await db
@@ -572,14 +673,21 @@ export async function createFlagEnvironmentRule(
       .returning({ id: flagEnvironmentRules.id })
 
     if (rule) {
-      await logAuditEvent({
+      await logAuditEventV2({
         projectId: activeEnvironment.projectId,
-        userId: session.user.id,
+        scope: 'environment',
+        environmentId: activeEnvironment.id,
+        environmentKey: activeEnvironment.key,
+        ...auditContext,
         action: AUDIT_ACTIONS.FLAG_RULE_CREATED,
         resourceType: 'flag_rule',
         resourceId: rule.id,
         resourceKey: flag.key,
-        metadata: { environment: environmentKey, segment: segment.name, outcomeType: payload.outcomeType },
+        metadata: {
+          environment: environmentKey,
+          segment: segment.name,
+          outcomeType: payload.outcomeType,
+        },
       })
     }
 
@@ -588,7 +696,11 @@ export async function createFlagEnvironmentRule(
     revalidatePath(getFlagEditRedirect(flagId, activeEnvironment.key))
     return { ok: true, message: 'Rule created' }
   } catch {
-    return { ok: false, code: 'INTERNAL_SERVER_ERROR', message: 'Failed to create rule' }
+    return {
+      ok: false,
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Failed to create rule',
+    }
   }
 }
 
@@ -601,16 +713,25 @@ export async function updateFlagEnvironmentRule(
   const session = await requireSession()
   if ('ok' in session) return session
   try {
+    const auditContext = await getAuditContext(session)
     const { activeEnvironment } = await getEnvironmentContext(environmentKey)
     const flag = await getFlagDefinition(flagId)
     const state = await getFlagEnvironmentState(flagId, activeEnvironment.id)
     const existingRule = await getRuleById(ruleId)
 
-    if (!flag || !state || !existingRule || existingRule.flagEnvironmentId !== state.id)
+    if (
+      !flag ||
+      !state ||
+      !existingRule ||
+      existingRule.flagEnvironmentId !== state.id
+    )
       return { ok: false, code: 'NOT_FOUND', message: 'Rule not found' }
 
     const payload = getRulePayload(formData)
-    const segment = await getSegmentForProject(payload.segmentId, activeEnvironment.projectId)
+    const segment = await getSegmentForProject(
+      payload.segmentId,
+      activeEnvironment.projectId,
+    )
 
     if (!segment)
       return { ok: false, code: 'NOT_FOUND', message: 'Segment not found' }
@@ -626,14 +747,21 @@ export async function updateFlagEnvironmentRule(
       })
       .where(eq(flagEnvironmentRules.id, ruleId))
 
-    await logAuditEvent({
+    await logAuditEventV2({
       projectId: activeEnvironment.projectId,
-      userId: session.user.id,
+      scope: 'environment',
+      environmentId: activeEnvironment.id,
+      environmentKey: activeEnvironment.key,
+      ...auditContext,
       action: AUDIT_ACTIONS.FLAG_RULE_UPDATED,
       resourceType: 'flag_rule',
       resourceId: ruleId,
       resourceKey: flag.key,
-      metadata: { environment: environmentKey, segment: segment.name, outcomeType: payload.outcomeType },
+      metadata: {
+        environment: environmentKey,
+        segment: segment.name,
+        outcomeType: payload.outcomeType,
+      },
     })
 
     await invalidateFlagCache(activeEnvironment.key, flag.key)
@@ -641,7 +769,11 @@ export async function updateFlagEnvironmentRule(
     revalidatePath(getFlagEditRedirect(flagId, activeEnvironment.key))
     return { ok: true, message: 'Rule updated' }
   } catch {
-    return { ok: false, code: 'INTERNAL_SERVER_ERROR', message: 'Failed to update rule' }
+    return {
+      ok: false,
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Failed to update rule',
+    }
   }
 }
 
@@ -653,19 +785,30 @@ export async function deleteFlagEnvironmentRule(
   const session = await requireSession()
   if ('ok' in session) return session
   try {
+    const auditContext = await getAuditContext(session)
     const { activeEnvironment } = await getEnvironmentContext(environmentKey)
     const flag = await getFlagDefinition(flagId)
     const state = await getFlagEnvironmentState(flagId, activeEnvironment.id)
     const existingRule = await getRuleById(ruleId)
 
-    if (!flag || !state || !existingRule || existingRule.flagEnvironmentId !== state.id)
+    if (
+      !flag ||
+      !state ||
+      !existingRule ||
+      existingRule.flagEnvironmentId !== state.id
+    )
       return { ok: false, code: 'NOT_FOUND', message: 'Rule not found' }
 
-    await db.delete(flagEnvironmentRules).where(eq(flagEnvironmentRules.id, ruleId))
+    await db
+      .delete(flagEnvironmentRules)
+      .where(eq(flagEnvironmentRules.id, ruleId))
 
-    await logAuditEvent({
+    await logAuditEventV2({
       projectId: activeEnvironment.projectId,
-      userId: session.user.id,
+      scope: 'environment',
+      environmentId: activeEnvironment.id,
+      environmentKey: activeEnvironment.key,
+      ...auditContext,
       action: AUDIT_ACTIONS.FLAG_RULE_DELETED,
       resourceType: 'flag_rule',
       resourceId: ruleId,
@@ -678,7 +821,11 @@ export async function deleteFlagEnvironmentRule(
     revalidatePath(getFlagEditRedirect(flagId, activeEnvironment.key))
     return { ok: true, message: 'Rule deleted' }
   } catch {
-    return { ok: false, code: 'INTERNAL_SERVER_ERROR', message: 'Failed to delete rule' }
+    return {
+      ok: false,
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Failed to delete rule',
+    }
   }
 }
 
@@ -690,13 +837,15 @@ export async function updateFlag(
   const session = await requireSession()
   if ('ok' in session) return session
   try {
+    const auditContext = await getAuditContext(session)
     const description = ((formData.get('description') as string) || '').trim()
     const isEnabled = formData.get('isEnabled') === 'on'
     const strategy = getStrategyFromFormData(formData)
     const { activeEnvironment } = await getEnvironmentContext(environmentKey)
     const flag = await getFlagDefinition(id)
 
-    if (!flag) return { ok: false, code: 'NOT_FOUND', message: 'Flag not found' }
+    if (!flag)
+      return { ok: false, code: 'NOT_FOUND', message: 'Flag not found' }
 
     await db
       .update(flags)
@@ -705,20 +854,33 @@ export async function updateFlag(
 
     await db
       .insert(flagEnvironments)
-      .values({ flagId: id, environmentId: activeEnvironment.id, isEnabled, strategy })
+      .values({
+        flagId: id,
+        environmentId: activeEnvironment.id,
+        isEnabled,
+        strategy,
+      })
       .onConflictDoUpdate({
         target: [flagEnvironments.flagId, flagEnvironments.environmentId],
         set: { isEnabled, strategy, updatedAt: new Date() },
       })
 
-    await logAuditEvent({
+    await logAuditEventV2({
       projectId: activeEnvironment.projectId,
-      userId: session.user.id,
+      scope: 'environment',
+      environmentId: activeEnvironment.id,
+      environmentKey: activeEnvironment.key,
+      ...auditContext,
       action: AUDIT_ACTIONS.FLAG_UPDATED,
       resourceType: 'flag',
       resourceId: id,
       resourceKey: flag.key,
-      metadata: { description: description || null, isEnabled, strategy, environment: environmentKey },
+      metadata: {
+        description: description || null,
+        isEnabled,
+        strategy,
+        environment: environmentKey,
+      },
     })
 
     await invalidateFlagCache(activeEnvironment.key, flag.key)
@@ -726,6 +888,10 @@ export async function updateFlag(
     revalidatePath(getFlagEditRedirect(id, activeEnvironment.key))
     return { ok: true, message: 'Flag updated' }
   } catch {
-    return { ok: false, code: 'INTERNAL_SERVER_ERROR', message: 'Failed to update flag' }
+    return {
+      ok: false,
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Failed to update flag',
+    }
   }
 }
