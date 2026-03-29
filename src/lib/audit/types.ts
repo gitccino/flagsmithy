@@ -1,7 +1,10 @@
 import { z } from 'zod'
 import { AUDIT_ACTIONS, type AuditAction } from '@/lib/constants/audit-actions'
 
-const auditActionValues = Object.values(AUDIT_ACTIONS) as [AuditAction, ...AuditAction[]]
+const auditActionValues = Object.values(AUDIT_ACTIONS) as [
+  AuditAction,
+  ...AuditAction[],
+]
 
 export const AUDIT_SCOPES = ['project', 'environment'] as const
 export type AuditScope = (typeof AUDIT_SCOPES)[number]

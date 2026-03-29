@@ -123,9 +123,7 @@ export default async function SettingsPage({
                     </td>
                     <td className="px-2 py-3 text-foreground">{label}</td>
                     <td className="px-2 py-3">{event.resourceKey}</td>
-                    <td className="px-2 py-3">
-                      {event.userName ?? 'System'}
-                    </td>
+                    <td className="px-2 py-3">{event.userName ?? 'System'}</td>
                   </tr>
                 )
               })}

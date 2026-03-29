@@ -304,20 +304,24 @@ export const auditLogs = pgTable(
     createdAt: timestamp('created_at').notNull().defaultNow(),
   },
   (table) => [
+    // Fast for “show latest audit events for a project.
     index('audit_logs_project_id_created_at_idx').on(
       table.projectId,
       table.createdAt,
     ),
+    // Fast for “show latest events in project X, environment Y.
     index('audit_logs_project_id_environment_key_created_at_idx').on(
       table.projectId,
       table.environmentKey,
       table.createdAt,
     ),
+    // Fast for filtering by action type inside a project (like only `flag.updated`).
     index('audit_logs_project_id_action_created_at_idx').on(
       table.projectId,
       table.action,
       table.createdAt,
     ),
+    // Fast lookup for one request trace across logs/audit.
     index('audit_logs_request_id_idx').on(table.requestId),
   ],
 )
