@@ -62,6 +62,9 @@ export async function createApiKey(
     if (key) {
       await logAuditEventV2({
         projectId: activeEnvironment.projectId,
+        scope: 'environment',
+        environmentId: activeEnvironment.id,
+        environmentKey: activeEnvironment.key,
         ...auditContext,
         action: AUDIT_ACTIONS.API_KEY_CREATED,
         resourceType: 'api_key',
@@ -110,6 +113,9 @@ export async function deleteApiKey(id: string): Promise<ActionResponse> {
 
     await logAuditEventV2({
       projectId: key.projectId,
+      scope: 'environment',
+      environmentId: activeEnvironment.id,
+      environmentKey: activeEnvironment.key,
       ...auditContext,
       action: AUDIT_ACTIONS.API_KEY_DELETED,
       resourceType: 'api_key',

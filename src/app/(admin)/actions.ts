@@ -246,6 +246,9 @@ export async function createFlag(
 
     await logAuditEventV2({
       projectId: activeEnvironment.projectId,
+      scope: 'environment',
+      environmentId: activeEnvironment.id,
+      environmentKey: activeEnvironment.key,
       ...auditContext,
       action: AUDIT_ACTIONS.FLAG_CREATED,
       resourceType: 'flag',
@@ -304,6 +307,9 @@ export async function toggleFlag(
 
     await logAuditEventV2({
       projectId: activeEnvironment.projectId,
+      scope: 'environment',
+      environmentId: activeEnvironment.id,
+      environmentKey: activeEnvironment.key,
       ...auditContext,
       action: AUDIT_ACTIONS.FLAG_TOGGLED,
       resourceType: 'flag',
@@ -339,6 +345,7 @@ export async function deleteFlag(id: string): Promise<ActionResponse> {
 
     await logAuditEventV2({
       projectId: flag.projectId,
+      scope: 'project',
       ...auditContext,
       action: AUDIT_ACTIONS.FLAG_DELETED,
       resourceType: 'flag',
@@ -380,6 +387,7 @@ export async function createSegment(
     if (segment) {
       await logAuditEventV2({
         projectId: activeEnvironment.projectId,
+        scope: 'project',
         ...auditContext,
         action: AUDIT_ACTIONS.SEGMENT_CREATED,
         resourceType: 'segment',
@@ -427,6 +435,7 @@ export async function updateSegment(
 
     await logAuditEventV2({
       projectId: segment.projectId,
+      scope: 'project',
       ...auditContext,
       action: AUDIT_ACTIONS.SEGMENT_UPDATED,
       resourceType: 'segment',
@@ -464,6 +473,7 @@ export async function deleteSegment(
 
     await logAuditEventV2({
       projectId: segment.projectId,
+      scope: 'project',
       ...auditContext,
       action: AUDIT_ACTIONS.SEGMENT_DELETED,
       resourceType: 'segment',
@@ -503,6 +513,7 @@ export async function createSegmentCondition(
     if (condition) {
       await logAuditEventV2({
         projectId: segment.projectId,
+        scope: 'project',
         ...auditContext,
         action: AUDIT_ACTIONS.SEGMENT_CONDITION_CREATED,
         resourceType: 'segment_condition',
@@ -551,6 +562,7 @@ export async function updateSegmentCondition(
 
     await logAuditEventV2({
       projectId: segment.projectId,
+      scope: 'project',
       ...auditContext,
       action: AUDIT_ACTIONS.SEGMENT_CONDITION_UPDATED,
       resourceType: 'segment_condition',
@@ -595,6 +607,7 @@ export async function deleteSegmentCondition(
 
     await logAuditEventV2({
       projectId: segment.projectId,
+      scope: 'project',
       ...auditContext,
       action: AUDIT_ACTIONS.SEGMENT_CONDITION_DELETED,
       resourceType: 'segment_condition',
@@ -662,6 +675,9 @@ export async function createFlagEnvironmentRule(
     if (rule) {
       await logAuditEventV2({
         projectId: activeEnvironment.projectId,
+        scope: 'environment',
+        environmentId: activeEnvironment.id,
+        environmentKey: activeEnvironment.key,
         ...auditContext,
         action: AUDIT_ACTIONS.FLAG_RULE_CREATED,
         resourceType: 'flag_rule',
@@ -733,6 +749,9 @@ export async function updateFlagEnvironmentRule(
 
     await logAuditEventV2({
       projectId: activeEnvironment.projectId,
+      scope: 'environment',
+      environmentId: activeEnvironment.id,
+      environmentKey: activeEnvironment.key,
       ...auditContext,
       action: AUDIT_ACTIONS.FLAG_RULE_UPDATED,
       resourceType: 'flag_rule',
@@ -786,6 +805,9 @@ export async function deleteFlagEnvironmentRule(
 
     await logAuditEventV2({
       projectId: activeEnvironment.projectId,
+      scope: 'environment',
+      environmentId: activeEnvironment.id,
+      environmentKey: activeEnvironment.key,
       ...auditContext,
       action: AUDIT_ACTIONS.FLAG_RULE_DELETED,
       resourceType: 'flag_rule',
@@ -845,6 +867,9 @@ export async function updateFlag(
 
     await logAuditEventV2({
       projectId: activeEnvironment.projectId,
+      scope: 'environment',
+      environmentId: activeEnvironment.id,
+      environmentKey: activeEnvironment.key,
       ...auditContext,
       action: AUDIT_ACTIONS.FLAG_UPDATED,
       resourceType: 'flag',
