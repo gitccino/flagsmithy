@@ -4,13 +4,17 @@ import { db } from '@/lib/db'
 import { apiKeys, environments } from '@/lib/db/schema'
 import { generateApiKey, getKeyPrefix, hashApiKey } from '@/lib/api-keys'
 import { getEnvironmentContext } from '@/lib/flags'
-import { auth } from '@/lib/auth'
+import { auth, type Session } from '@/lib/auth'
 import { headers } from 'next/headers'
 import { and, eq } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import type { ActionResponse } from '@/types'
 import { logAuditEventV2 } from '@/lib/audit-logs'
 import { AUDIT_ACTIONS } from '@/lib/constants/audit-actions'
+import {
+  resolveAuditActorContext,
+  resolveAuditRequestContext,
+} from '@/lib/audit/context'
 
 async function requireSession() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -24,6 +28,12 @@ async function requireSession() {
   return session
 }
 
+async function getAuditContext(session: Session) {
+  const [requestContext] = await Promise.all([resolveAuditRequestContext()])
+  const actorContext = resolveAuditActorContext(session)
+  return { ...actorContext, ...requestContext }
+}
+
 export async function createApiKey(
   formData: FormData,
 ): Promise<ActionResponse<{ rawKey: string }>> {
@@ -31,6 +41,7 @@ export async function createApiKey(
   if ('ok' in session) return session
 
   try {
+    const auditContext = await getAuditContext(session)
     const name = ((formData.get('name') as string) ?? '').trim()
     if (!name) return { ok: false, message: 'Name is required' }
 
@@ -51,9 +62,7 @@ export async function createApiKey(
     if (key) {
       await logAuditEventV2({
         projectId: activeEnvironment.projectId,
-        userId: session.user.id,
-        actorType: 'user',
-        actorId: session.user.id,
+        ...auditContext,
         action: AUDIT_ACTIONS.API_KEY_CREATED,
         resourceType: 'api_key',
         resourceId: key.id,
@@ -77,6 +86,7 @@ export async function deleteApiKey(id: string): Promise<ActionResponse> {
   if ('ok' in session) return session
 
   try {
+    const auditContext = await getAuditContext(session)
     const { activeEnvironment } = await getEnvironmentContext()
 
     // Capture key info before deletion — join to environments to get projectId for audit log.
@@ -100,9 +110,7 @@ export async function deleteApiKey(id: string): Promise<ActionResponse> {
 
     await logAuditEventV2({
       projectId: key.projectId,
-      userId: session.user.id,
-      actorType: 'user',
-      actorId: session.user.id,
+      ...auditContext,
       action: AUDIT_ACTIONS.API_KEY_DELETED,
       resourceType: 'api_key',
       resourceId: id,

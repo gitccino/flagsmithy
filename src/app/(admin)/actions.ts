@@ -35,10 +35,14 @@ import {
   RULE_OUTCOME_TYPES,
   type RuleOutcomeType,
 } from '@/lib/constants/rule-outcome'
-import { auth } from '@/lib/auth'
+import { auth, type Session } from '@/lib/auth'
 import { headers } from 'next/headers'
 import { logAuditEventV2 } from '@/lib/audit-logs'
 import { AUDIT_ACTIONS } from '@/lib/constants/audit-actions'
+import {
+  resolveAuditActorContext,
+  resolveAuditRequestContext,
+} from '@/lib/audit/context'
 
 // Returns the session on success, or an ActionResponse error on failure.
 // All actions call this first and return early if it's an error.
@@ -52,6 +56,12 @@ async function requireSession() {
     }
   }
   return session
+}
+
+async function getAuditContext(session: Session) {
+  const [requestContext] = await Promise.all([resolveAuditRequestContext()])
+  const actorContext = resolveAuditActorContext(session)
+  return { ...actorContext, ...requestContext }
 }
 
 type ConditionValueType = 'string' | 'number' | 'boolean'
@@ -208,6 +218,7 @@ export async function createFlag(
   const session = await requireSession()
   if ('ok' in session) return session
   try {
+    const auditContext = await getAuditContext(session)
     const key = (formData.get('key') as string).trim()
     const description = (formData.get('description') as string).trim()
     const environmentKey = (
@@ -235,9 +246,7 @@ export async function createFlag(
 
     await logAuditEventV2({
       projectId: activeEnvironment.projectId,
-      userId: session.user.id,
-      actorType: 'user',
-      actorId: session.user.id,
+      ...auditContext,
       action: AUDIT_ACTIONS.FLAG_CREATED,
       resourceType: 'flag',
       resourceId: flag.id,
@@ -270,6 +279,7 @@ export async function toggleFlag(
   const session = await requireSession()
   if ('ok' in session) return session
   try {
+    const auditContext = await getAuditContext(session)
     const { activeEnvironment } = await getEnvironmentContext(environmentKey)
     const flag = await getFlagDefinition(id)
 
@@ -294,9 +304,7 @@ export async function toggleFlag(
 
     await logAuditEventV2({
       projectId: activeEnvironment.projectId,
-      userId: session.user.id,
-      actorType: 'user',
-      actorId: session.user.id,
+      ...auditContext,
       action: AUDIT_ACTIONS.FLAG_TOGGLED,
       resourceType: 'flag',
       resourceId: id,
@@ -320,6 +328,7 @@ export async function deleteFlag(id: string): Promise<ActionResponse> {
   const session = await requireSession()
   if ('ok' in session) return session
   try {
+    const auditContext = await getAuditContext(session)
     // Capture flag info before deletion for audit log
     const flag = await getFlagDefinition(id)
     if (!flag)
@@ -330,9 +339,7 @@ export async function deleteFlag(id: string): Promise<ActionResponse> {
 
     await logAuditEventV2({
       projectId: flag.projectId,
-      userId: session.user.id,
-      actorType: 'user',
-      actorId: session.user.id,
+      ...auditContext,
       action: AUDIT_ACTIONS.FLAG_DELETED,
       resourceType: 'flag',
       resourceId: id,
@@ -356,6 +363,7 @@ export async function createSegment(
   const session = await requireSession()
   if ('ok' in session) return session
   try {
+    const auditContext = await getAuditContext(session)
     const name = ((formData.get('name') as string) || '').trim()
     const rawDescription = formData.get('description')
     const description =
@@ -372,9 +380,7 @@ export async function createSegment(
     if (segment) {
       await logAuditEventV2({
         projectId: activeEnvironment.projectId,
-        userId: session.user.id,
-        actorType: 'user',
-        actorId: session.user.id,
+        ...auditContext,
         action: AUDIT_ACTIONS.SEGMENT_CREATED,
         resourceType: 'segment',
         resourceId: segment.id,
@@ -406,6 +412,7 @@ export async function updateSegment(
   const session = await requireSession()
   if ('ok' in session) return session
   try {
+    const auditContext = await getAuditContext(session)
     const segment = await getSegmentById(segmentId)
     if (!segment)
       return { ok: false, code: 'NOT_FOUND', message: 'Segment not found' }
@@ -420,9 +427,7 @@ export async function updateSegment(
 
     await logAuditEventV2({
       projectId: segment.projectId,
-      userId: session.user.id,
-      actorType: 'user',
-      actorId: session.user.id,
+      ...auditContext,
       action: AUDIT_ACTIONS.SEGMENT_UPDATED,
       resourceType: 'segment',
       resourceId: segmentId,
@@ -449,6 +454,7 @@ export async function deleteSegment(
   const session = await requireSession()
   if ('ok' in session) return session
   try {
+    const auditContext = await getAuditContext(session)
     const segment = await getSegmentById(segmentId)
     if (!segment)
       return { ok: false, code: 'NOT_FOUND', message: 'Segment not found' }
@@ -458,9 +464,7 @@ export async function deleteSegment(
 
     await logAuditEventV2({
       projectId: segment.projectId,
-      userId: session.user.id,
-      actorType: 'user',
-      actorId: session.user.id,
+      ...auditContext,
       action: AUDIT_ACTIONS.SEGMENT_DELETED,
       resourceType: 'segment',
       resourceId: segmentId,
@@ -485,6 +489,7 @@ export async function createSegmentCondition(
   const session = await requireSession()
   if ('ok' in session) return session
   try {
+    const auditContext = await getAuditContext(session)
     const segment = await getSegmentById(segmentId)
     if (!segment)
       return { ok: false, code: 'NOT_FOUND', message: 'Segment not found' }
@@ -498,9 +503,7 @@ export async function createSegmentCondition(
     if (condition) {
       await logAuditEventV2({
         projectId: segment.projectId,
-        userId: session.user.id,
-        actorType: 'user',
-        actorId: session.user.id,
+        ...auditContext,
         action: AUDIT_ACTIONS.SEGMENT_CONDITION_CREATED,
         resourceType: 'segment_condition',
         resourceId: condition.id,
@@ -530,6 +533,7 @@ export async function updateSegmentCondition(
   const session = await requireSession()
   if ('ok' in session) return session
   try {
+    const auditContext = await getAuditContext(session)
     const segment = await getSegmentById(segmentId)
     if (!segment)
       return { ok: false, code: 'NOT_FOUND', message: 'Segment not found' }
@@ -547,9 +551,7 @@ export async function updateSegmentCondition(
 
     await logAuditEventV2({
       projectId: segment.projectId,
-      userId: session.user.id,
-      actorType: 'user',
-      actorId: session.user.id,
+      ...auditContext,
       action: AUDIT_ACTIONS.SEGMENT_CONDITION_UPDATED,
       resourceType: 'segment_condition',
       resourceId: conditionId,
@@ -577,6 +579,7 @@ export async function deleteSegmentCondition(
   const session = await requireSession()
   if ('ok' in session) return session
   try {
+    const auditContext = await getAuditContext(session)
     const segment = await getSegmentById(segmentId)
     if (!segment)
       return { ok: false, code: 'NOT_FOUND', message: 'Segment not found' }
@@ -592,9 +595,7 @@ export async function deleteSegmentCondition(
 
     await logAuditEventV2({
       projectId: segment.projectId,
-      userId: session.user.id,
-      actorType: 'user',
-      actorId: session.user.id,
+      ...auditContext,
       action: AUDIT_ACTIONS.SEGMENT_CONDITION_DELETED,
       resourceType: 'segment_condition',
       resourceId: conditionId,
@@ -622,6 +623,7 @@ export async function createFlagEnvironmentRule(
   const session = await requireSession()
   if ('ok' in session) return session
   try {
+    const auditContext = await getAuditContext(session)
     const { activeEnvironment } = await getEnvironmentContext(environmentKey)
     const flag = await getFlagDefinition(flagId)
 
@@ -660,9 +662,7 @@ export async function createFlagEnvironmentRule(
     if (rule) {
       await logAuditEventV2({
         projectId: activeEnvironment.projectId,
-        userId: session.user.id,
-        actorType: 'user',
-        actorId: session.user.id,
+        ...auditContext,
         action: AUDIT_ACTIONS.FLAG_RULE_CREATED,
         resourceType: 'flag_rule',
         resourceId: rule.id,
@@ -697,6 +697,7 @@ export async function updateFlagEnvironmentRule(
   const session = await requireSession()
   if ('ok' in session) return session
   try {
+    const auditContext = await getAuditContext(session)
     const { activeEnvironment } = await getEnvironmentContext(environmentKey)
     const flag = await getFlagDefinition(flagId)
     const state = await getFlagEnvironmentState(flagId, activeEnvironment.id)
@@ -732,9 +733,7 @@ export async function updateFlagEnvironmentRule(
 
     await logAuditEventV2({
       projectId: activeEnvironment.projectId,
-      userId: session.user.id,
-      actorType: 'user',
-      actorId: session.user.id,
+      ...auditContext,
       action: AUDIT_ACTIONS.FLAG_RULE_UPDATED,
       resourceType: 'flag_rule',
       resourceId: ruleId,
@@ -767,6 +766,7 @@ export async function deleteFlagEnvironmentRule(
   const session = await requireSession()
   if ('ok' in session) return session
   try {
+    const auditContext = await getAuditContext(session)
     const { activeEnvironment } = await getEnvironmentContext(environmentKey)
     const flag = await getFlagDefinition(flagId)
     const state = await getFlagEnvironmentState(flagId, activeEnvironment.id)
@@ -786,9 +786,7 @@ export async function deleteFlagEnvironmentRule(
 
     await logAuditEventV2({
       projectId: activeEnvironment.projectId,
-      userId: session.user.id,
-      actorType: 'user',
-      actorId: session.user.id,
+      ...auditContext,
       action: AUDIT_ACTIONS.FLAG_RULE_DELETED,
       resourceType: 'flag_rule',
       resourceId: ruleId,
@@ -817,6 +815,7 @@ export async function updateFlag(
   const session = await requireSession()
   if ('ok' in session) return session
   try {
+    const auditContext = await getAuditContext(session)
     const description = ((formData.get('description') as string) || '').trim()
     const isEnabled = formData.get('isEnabled') === 'on'
     const strategy = getStrategyFromFormData(formData)
@@ -846,9 +845,7 @@ export async function updateFlag(
 
     await logAuditEventV2({
       projectId: activeEnvironment.projectId,
-      userId: session.user.id,
-      actorType: 'user',
-      actorId: session.user.id,
+      ...auditContext,
       action: AUDIT_ACTIONS.FLAG_UPDATED,
       resourceType: 'flag',
       resourceId: id,
