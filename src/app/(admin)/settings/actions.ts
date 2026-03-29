@@ -9,7 +9,7 @@ import { headers } from 'next/headers'
 import { and, eq } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import type { ActionResponse } from '@/types'
-import { logAuditEvent } from '@/lib/audit-logs'
+import { logAuditEventV2 } from '@/lib/audit-logs'
 import { AUDIT_ACTIONS } from '@/lib/constants/audit-actions'
 
 async function requireSession() {
@@ -49,9 +49,11 @@ export async function createApiKey(
       .returning({ id: apiKeys.id })
 
     if (key) {
-      await logAuditEvent({
+      await logAuditEventV2({
         projectId: activeEnvironment.projectId,
         userId: session.user.id,
+        actorType: 'user',
+        actorId: session.user.id,
         action: AUDIT_ACTIONS.API_KEY_CREATED,
         resourceType: 'api_key',
         resourceId: key.id,
@@ -96,9 +98,11 @@ export async function deleteApiKey(id: string): Promise<ActionResponse> {
 
     await db.delete(apiKeys).where(eq(apiKeys.id, id))
 
-    await logAuditEvent({
+    await logAuditEventV2({
       projectId: key.projectId,
       userId: session.user.id,
+      actorType: 'user',
+      actorId: session.user.id,
       action: AUDIT_ACTIONS.API_KEY_DELETED,
       resourceType: 'api_key',
       resourceId: id,
