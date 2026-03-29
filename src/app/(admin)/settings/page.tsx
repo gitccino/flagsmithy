@@ -1,7 +1,7 @@
 import { db } from '@/lib/db'
 import { apiKeys, auditLogs, projects, users } from '@/lib/db/schema'
 import { DEFAULT_PROJECT_KEY, getEnvironmentContext } from '@/lib/flags'
-import { eq, desc } from 'drizzle-orm'
+import { and, desc, eq, gte } from 'drizzle-orm'
 import { AUDIT_ACTION_LABELS } from '@/lib/constants/audit-actions'
 import { ApiKeyDashboard } from '@/components/settings/api-key/api-key-dashboard'
 import { EnvironmentSwitcher } from '@/components/environment-switcher'
@@ -10,11 +10,33 @@ import { Separator } from '@/components/ui/separator'
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ environment?: string }>
+  searchParams: Promise<{
+    environment?: string
+    auditEnvironment?: string
+    auditAction?: string
+    auditRange?: string
+  }>
 }) {
-  const { environment: requestedEnvironment } = await searchParams
+  const {
+    environment: requestedEnvironment,
+    auditEnvironment: requestedAuditEnvironment,
+    auditAction: requestedAuditAction,
+    auditRange: requestedAuditRange,
+  } = await searchParams
   const { environments, activeEnvironment } =
     await getEnvironmentContext(requestedEnvironment)
+  const auditEnvironmentFilter = requestedAuditEnvironment ?? 'all'
+  const auditActionFilter = requestedAuditAction ?? 'all'
+  const auditRangeFilter = requestedAuditRange ?? '7d'
+  const now = new Date()
+  const sinceDate =
+    auditRangeFilter === '24h'
+      ? new Date(now.getTime() - 24 * 60 * 60 * 1000)
+      : auditRangeFilter === '7d'
+        ? new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+        : auditRangeFilter === '30d'
+          ? new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+          : null
 
   const [project] = await db
     .select({ id: projects.id, name: projects.name, key: projects.key })
@@ -27,6 +49,8 @@ export default async function SettingsPage({
         .select({
           id: auditLogs.id,
           action: auditLogs.action,
+          status: auditLogs.status,
+          environmentKey: auditLogs.environmentKey,
           resourceType: auditLogs.resourceType,
           resourceKey: auditLogs.resourceKey,
           createdAt: auditLogs.createdAt,
@@ -34,7 +58,18 @@ export default async function SettingsPage({
         })
         .from(auditLogs)
         .leftJoin(users, eq(auditLogs.userId, users.id))
-        .where(eq(auditLogs.projectId, project.id))
+        .where(
+          and(
+            eq(auditLogs.projectId, project.id),
+            auditEnvironmentFilter !== 'all'
+              ? eq(auditLogs.environmentKey, auditEnvironmentFilter)
+              : undefined,
+            auditActionFilter !== 'all'
+              ? eq(auditLogs.action, auditActionFilter)
+              : undefined,
+            sinceDate ? gte(auditLogs.createdAt, sinceDate) : undefined,
+          ),
+        )
         .orderBy(desc(auditLogs.createdAt))
         .limit(20)
     : []
@@ -85,6 +120,66 @@ export default async function SettingsPage({
           </p>
         </div>
 
+        <form method="get" className="flex flex-wrap gap-3 items-end">
+          <input
+            type="hidden"
+            name="environment"
+            value={activeEnvironment.key}
+          />
+          <label className="text-xs text-muted-foreground flex flex-col gap-1">
+            Audit environment
+            <select
+              name="auditEnvironment"
+              defaultValue={auditEnvironmentFilter}
+              className="border rounded-md bg-background px-2 py-1 text-sm text-foreground"
+            >
+              <option value="all">All environments</option>
+              {environments.map((environment) => (
+                <option key={environment.id} value={environment.key}>
+                  {environment.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="text-xs text-muted-foreground flex flex-col gap-1">
+            Action
+            <select
+              name="auditAction"
+              defaultValue={auditActionFilter}
+              className="border rounded-md bg-background px-2 py-1 text-sm text-foreground"
+            >
+              <option value="all">All actions</option>
+              {Object.entries(AUDIT_ACTION_LABELS).map(([action, label]) => (
+                <option key={action} value={action}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="text-xs text-muted-foreground flex flex-col gap-1">
+            Time range
+            <select
+              name="auditRange"
+              defaultValue={auditRangeFilter}
+              className="border rounded-md bg-background px-2 py-1 text-sm text-foreground"
+            >
+              <option value="24h">Last 24h</option>
+              <option value="7d">Last 7 days</option>
+              <option value="30d">Last 30 days</option>
+              <option value="all">All time</option>
+            </select>
+          </label>
+
+          <button
+            type="submit"
+            className="h-9 px-3 rounded-md border text-sm hover:bg-muted/30"
+          >
+            Apply filters
+          </button>
+        </form>
+
         {recentEvents.length === 0 ? (
           <>
             <Separator />
@@ -101,6 +196,12 @@ export default async function SettingsPage({
                 </th>
                 <th className="text-left px-2 py-4 text-muted-foreground font-medium">
                   Actions
+                </th>
+                <th className="text-left px-2 py-4 text-muted-foreground font-medium">
+                  Environment
+                </th>
+                <th className="text-left px-2 py-4 text-muted-foreground font-medium">
+                  Status
                 </th>
                 <th className="text-left px-2 py-4 text-muted-foreground font-medium">
                   Resource Key
@@ -125,6 +226,10 @@ export default async function SettingsPage({
                       {event.createdAt.toLocaleString()}
                     </td>
                     <td className="px-2 py-3 text-foreground">{label}</td>
+                    <td className="px-2 py-3">
+                      {event.environmentKey ?? 'Project-wide'}
+                    </td>
+                    <td className="px-2 py-3">{event.status}</td>
                     <td className="px-2 py-3">{event.resourceKey}</td>
                     <td className="px-2 py-3">{event.userName ?? 'System'}</td>
                   </tr>
