@@ -7,7 +7,7 @@ import {
   projects,
   type FlagStrategy,
 } from '@/lib/db/schema'
-import { asc, eq, and, desc } from 'drizzle-orm'
+import { asc, eq, and, desc, sql } from 'drizzle-orm'
 import { redis } from '@/lib/redis'
 
 export const DEFAULT_PROJECT_NAME = 'Default Project'
@@ -85,7 +85,15 @@ export async function listProjectEnvironments() {
     .from(environments)
     .innerJoin(projects, eq(environments.projectId, projects.id))
     .where(eq(projects.key, DEFAULT_PROJECT_KEY))
-    .orderBy(asc(environments.createdAt), asc(environments.name))
+    .orderBy(
+      sql`CASE ${environments.key}
+        WHEN 'development' THEN 1
+        WHEN 'staging' THEN 2
+        WHEN 'production' THEN 3
+        ELSE 4
+      END`,
+      asc(environments.name),
+    )
 }
 
 export async function getEnvironmentContext(requestedKey?: string | null) {

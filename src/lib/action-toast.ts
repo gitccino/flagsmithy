@@ -3,10 +3,15 @@
 import { toast } from 'sonner'
 import type { ActionResponse } from '@/types'
 
+// Generic type parameter (Placeholder type) defaults to void if you don't provide one
 type ActionToastOptions<T = void> = {
   loading: string
-  success?: string | ((response: Extract<ActionResponse<T>, { ok: true }>) => string)
-  error?: string | ((response: Extract<ActionResponse<T>, { ok: false }>) => string)
+  success?:
+    | string
+    | ((response: Extract<ActionResponse<T>, { ok: true }>) => string)
+  error?:
+    | string
+    | ((response: Extract<ActionResponse<T>, { ok: false }>) => string)
 }
 
 export async function runActionWithToast<T = void>(
@@ -22,7 +27,7 @@ export async function runActionWithToast<T = void>(
       const successMessage =
         typeof options.success === 'function'
           ? options.success(response)
-          : options.success ?? response.message ?? 'Success'
+          : (options.success ?? response.message ?? 'Success')
       toast.success(successMessage, { id: toastId })
       return response
     }
@@ -30,7 +35,7 @@ export async function runActionWithToast<T = void>(
     const errorMessage =
       typeof options.error === 'function'
         ? options.error(response)
-        : options.error ?? response.message
+        : (options.error ?? response.message)
     toast.error(errorMessage, { id: toastId })
     return response
   } catch (error) {

@@ -1,4 +1,3 @@
-import { table } from 'console'
 import {
   boolean,
   integer,
@@ -169,6 +168,144 @@ export const flagEnvironmentRules = pgTable(
     unique('flag_environment_rules_flag_environment_id_segment_id_unique').on(
       table.flagEnvironmentId,
       table.segmentId,
+    ),
+  ],
+)
+
+// ─── Auth Tables (Better Auth) ──────────────────────────────────────────────
+
+/** User account — the person who logs in to the admin dashboard */
+export const users = pgTable('users', {
+  // text, not uuid — Better Auth generates alphanumeric IDs (not UUID format)
+  id: text('id').primaryKey(),
+  email: text('email').notNull().unique(),
+  emailVerified: boolean('email_verified').notNull().default(false),
+  name: text('name').notNull(),
+  image: text('image'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+})
+
+/** Active login session — one user can have multiple sessions (different devices) */
+export const sessions = pgTable('sessions', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  expiresAt: timestamp('expires_at').notNull(),
+  token: text('token').notNull().unique(),
+  ipAddress: text('ip_address'),
+  userAgent: text('user_agent'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+})
+
+/** Auth provider link — connects a user to an auth method (email/password or OAuth)
+ *  The `password` field stores the hashed password for email/password auth.
+ *  For OAuth, `providerId` would be 'github', 'google', etc.
+ */
+export const accounts = pgTable('accounts', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  providerId: text('provider_id').notNull(),
+  accountId: text('account_id').notNull(),
+  accessToken: text('access_token'),
+  refreshToken: text('refresh_token'),
+  idToken: text('id_token'),
+  accessTokenExpiresAt: timestamp('access_token_expires_at'),
+  refreshTokenExpiresAt: timestamp('refresh_token_expires_at'),
+  scope: text('scope'),
+  password: text('password'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+})
+
+/** Email verification tokens — used during sign-up to verify email ownership */
+export const verifications = pgTable('verifications', {
+  id: text('id').primaryKey(),
+  identifier: text('identifier').notNull(),
+  value: text('value').notNull(),
+  expiresAt: timestamp('expires_at').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+})
+
+// ─── API Keys ───────────────────────────────────────────────────────────────
+
+/** A hashed API key used by SDK clients to authenticate against the evaluation API.
+ *  The raw key is only shown once at creation — we only store the hash.
+ */
+export const apiKeys = pgTable('api_keys', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  environmentId: uuid('environment_id')
+    .notNull()
+    .references(() => environments.id, { onDelete: 'cascade' }),
+  // Human-readable label so you know what a key is for (e.g. "Production server")
+  name: text('name').notNull(),
+  // SHA-256 hash of the actual key — used for lookup on each API request
+  keyHash: text('key_hash').notNull().unique(),
+  // First ~10 chars of the key for display (e.g. "fs_abc123…")
+  keyPrefix: text('key_prefix').notNull(),
+  // Which admin user created this key
+  createdBy: text('created_by')
+    .notNull()
+    .references(() => users.id),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  // Updated whenever the key is used to authenticate a request
+  lastUsedAt: timestamp('last_used_at'),
+})
+
+// ─── Audit Logs ─────────────────────────────────────────────────────────────
+
+/** One row per admin action — who did what to which resource and when.
+ *  Used to display the audit trail on the settings page.
+ */
+export const auditLogs = pgTable('audit_logs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id')
+    .notNull()
+    .references(() => projects.id, { onDelete: 'cascade' }),
+  // The admin user who performed the action (nullable for future system events)
+  userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
+  // Dot-namespaced action constant, e.g. "flag.created", "segment.deleted"
+  action: text('action').notNull(),
+  // The type of thing that was acted on: "flag", "segment", "api_key", etc.
+  resourceType: text('resource_type').notNull(),
+  // The database ID of the resource
+  resourceId: text('resource_id').notNull(),
+  // Human-readable identifier for display (flag key, segment name, key name…)
+  resourceKey: text('resource_key'),
+  // Optional extra context stored as JSON (e.g. old/new values, environment)
+  metadata: jsonb('metadata'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+})
+
+// ─── Authorization ──────────────────────────────────────────────────────────
+
+/** Connects users to projects with a role.
+ *  Right now there's one project, but this prepares for multi-tenancy.
+ */
+export const projectMembers = pgTable(
+  'project_members',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    role: text('role').notNull().default('member'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => [
+    // A user can only be a member of a project once
+    unique('project_members_user_id_project_id_unique').on(
+      table.userId,
+      table.projectId,
     ),
   ],
 )

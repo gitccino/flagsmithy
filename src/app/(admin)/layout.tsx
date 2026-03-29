@@ -15,6 +15,11 @@ import {
   SidebarProvider,
 } from '@/components/ui/sidebar'
 import { Toaster } from '@/components/ui/sonner'
+import { auth, UserSession } from '@/lib/auth'
+import { headers } from 'next/headers'
+import { SignOutButton } from '@/components/sign-out-button'
+import ProfileMenu from '@/components/nav/profile-menu'
+import { redirect } from 'next/navigation'
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -41,9 +46,15 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  const initialFlags = {
-    'new-user-onboarding':
-      (await evaluateFlag('new-user-onboarding', 'user_123')) ?? false,
+  const [initialFlags, session] = await Promise.all([
+    evaluateFlag({ flagKey: 'new-user-onboarding' }).then((v) => ({
+      'new-user-onboarding': v ?? false,
+    })),
+    auth.api.getSession({ headers: await headers() }),
+  ])
+
+  if (!session?.user) {
+    redirect('/sign-in')
   }
 
   return (
@@ -51,7 +62,7 @@ export default async function RootLayout({
       lang="en"
       className={`dark ${geistSans.variable} ${geistMono.variable} ${sourceCodePro.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex bg-background text-white">
+      <body className="min-h-full flex bg-background text-foreground">
         <Toaster
           icons={{
             success: (
@@ -75,40 +86,7 @@ export default async function RootLayout({
         />
         <SidebarProvider defaultOpen={false}>
           <FlagProvider initialFlags={initialFlags}>
-            {/*<aside className="w-48 border-r bg-background flex-col hidden md:block">
-              <nav className="flex-1 p-4 space-y-1">
-                <Button variant="none" size="lg" asChild>
-                  <Link
-                    href="/"
-                    className="w-full flex justify-start items-center gap-3 px-4 py-2 text-sm font-medium rounded-lg hover:bg-flag-card-background-lv2 "
-                  >
-                    Dashboard
-                  </Link>
-                </Button>
-                <Button variant="none" size="lg" asChild>
-                  <Link
-                    href="/flags/new"
-                    className="w-full flex justify-start items-center gap-3 px-4 py-2 text-sm font-medium rounded-lg hover:bg-flag-card-background-lv2 "
-                  >
-                    + New Flag
-                  </Link>
-                </Button>
-              </nav>
-              <div className="p-4 border-t border-[#26292D]">
-                <Button variant="none" size="lg" asChild>
-                  <Link
-                    href="#"
-                    className="w-full flex justify-start items-center gap-3 px-4 py-2 text-sm font-medium rounded-lg hover:bg-flag-card-background-lv2"
-                  >
-                    <Settings size={18} />
-                    Settings
-                  </Link>
-                </Button>
-              </div>
-            </aside>*/}
-
             <Sidebar>
-              {/*<SidebarHeader />*/}
               <SidebarContent className="bg-background">
                 <SidebarGroup>
                   <Button variant="none" size="lg" asChild>
@@ -127,26 +105,38 @@ export default async function RootLayout({
                       Segments
                     </Link>
                   </Button>
-                  {/*<Button variant="none" size="lg" asChild>
+                  <Button variant="none" size="lg" asChild>
                     <Link
-                      href="#"
-                      className="w-full flex justify-start items-center gap-3 px-4 py-2 text-sm font-medium rounded-lg hover:bg-flag-card-background-lv2"
+                      href="/settings"
+                      className="w-full flex justify-start items-center gap-3 px-4 py-2 text-sm font-medium rounded-lg hover:bg-flag-card-background"
                     >
                       <Settings size={18} />
                       Settings
                     </Link>
-                  </Button>*/}
+                  </Button>
                 </SidebarGroup>
                 <SidebarGroup />
               </SidebarContent>
-              <SidebarFooter />
+              <SidebarFooter className="bg-background border-t border-border px-4 py-3">
+                {session?.user && (
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">
+                        {session.user.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {session.user.email}
+                      </p>
+                    </div>
+                    <SignOutButton />
+                  </div>
+                )}
+              </SidebarFooter>
             </Sidebar>
+
             <div className="flex-1 flex flex-col min-h-screen">
-              <header className="h-8 border-b bg-background backdrop-blur-md flex items-center px-8 sticky top-0 z-10">
+              <header className="max-w-6xl mx-auto w-full py-1 border-b-0 bg-background backdrop-blur-md flex items-center px-2 sticky top-0 z-10">
                 <div className="flex-1 flex items-center">
-                  {/*<span className="text-xs text-muted-foreground uppercase tracking-widest">
-                    Admin
-                  </span>*/}
                   <div>
                     <Button variant="link" asChild>
                       <Link href="/">Dashboard</Link>
@@ -154,6 +144,12 @@ export default async function RootLayout({
                     <Button variant="link" asChild>
                       <Link href="/segments">Segments</Link>
                     </Button>
+                    {/*<Button variant="link" asChild>
+                      <Link href="/settings">Settings</Link>
+                    </Button>*/}
+                  </div>
+                  <div className="ml-auto">
+                    <ProfileMenu user={session.user} />
                   </div>
                 </div>
               </header>

@@ -23,7 +23,7 @@ export function CreateFlagForm({
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (event: React.SubmitEvent<HTMLFormElement>) => {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
     startTransition(async () => {
@@ -83,7 +83,7 @@ export function CreateFlagForm({
         </p>
       </div>
 
-      <div className="flex gap-4 pt-4">
+      <div className="flex gap-4">
         <Button type="submit" size="lg" disabled={isPending}>
           Create Flag
         </Button>

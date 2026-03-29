@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation'
+import type { Metadata } from 'next'
 import EditFlagForm from '@/components/edit-flag-form'
 import { getEnvironmentContext, getFlagForEnvironment } from '@/lib/flags'
 import { EnvironmentSwitcher } from '@/components/environment-switcher'
@@ -7,6 +8,22 @@ import {
   listRulesForFlagEnvironment,
   listSegmentsForProject,
 } from '@/lib/segments'
+
+export async function generateMetadata({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ environment?: string }>
+}): Promise<Metadata> {
+  const { id } = await params
+  const { environment: requestedEnvironment } = await searchParams
+  const { activeEnvironment } = await getEnvironmentContext(requestedEnvironment)
+  const flag = await getFlagForEnvironment(id, activeEnvironment.key)
+  return {
+    title: flag ? `${flag.key} — Flagsmithy` : 'Edit Flag — Flagsmithy',
+  }
+}
 
 export default async function EditFlagPage({
   params,

@@ -31,7 +31,7 @@ export default async function SegmentsPage() {
 
       <section className="rounded-xl overflow-hidden bg-flag-card-background">
         <table className="w-full text-left">
-          <thead className="bg-flag-card-background-lv2">
+          <thead className="bg-flag-card-background-lv2 border-b">
             <tr>
               <th className="table-header-cell">Name</th>
               <th className="table-header-cell">Conditions</th>
@@ -56,7 +56,7 @@ export default async function SegmentsPage() {
                   className="hover:bg-flag-card-background-lv2 transition-colors"
                 >
                   <td className="table-body-cell">
-                    <div className="font-medium">{segment.name}</div>
+                    <span className="font-medium">{segment.name}</span>
                     <p className="text-muted-foreground text-xs mt-1">
                       {segment.description || 'No description'}
                     </p>

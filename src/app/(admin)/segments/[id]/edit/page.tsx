@@ -5,6 +5,20 @@ import { AddSegmentConditionForm } from '@/components/segment/add-segment-condit
 import { EditSegmentConditionForm } from '@/components/segment/edit-segment-condition-form'
 import { notFound } from 'next/navigation'
 import { Separator } from '@/components/ui/separator'
+import type { Metadata } from 'next'
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>
+}): Promise<Metadata> {
+  const { id } = await params
+  const { activeEnvironment } = await getEnvironmentContext(DEFAULT_ENVIRONMENT_KEY)
+  const segment = await getSegmentForProject(id, activeEnvironment.projectId)
+  return {
+    title: segment ? `${segment.name} — Flagsmithy` : 'Edit Segment — Flagsmithy',
+  }
+}
 
 export default async function EditSegmentPage({
   params,

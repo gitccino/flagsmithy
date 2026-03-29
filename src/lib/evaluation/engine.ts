@@ -26,6 +26,9 @@ type EvaluateFlagInput =
       environmentKey?: string
       userId?: string
       traits?: TraitMap
+      // When called from the evaluation API route, projectId comes from the API key.
+      // Scopes the DB query so one project's flags can't bleed into another's.
+      projectId?: string
     }
 
 type CachedFlagState = {
@@ -61,12 +64,14 @@ export async function evaluateFlag(
           environmentKey: DEFAULT_ENVIRONMENT_KEY,
           userId: legacyUserId,
           traits: undefined,
+          projectId: undefined,
         }
       : {
           flagKey: input.flagKey,
           environmentKey: input.environmentKey ?? DEFAULT_ENVIRONMENT_KEY,
           userId: input.userId,
           traits: input.traits,
+          projectId: input.projectId,
         }
   const cacheKey = getFlagCacheKey(payload.environmentKey, payload.flagKey)
   let flag = await redis.get<CachedFlagState>(cacheKey)
@@ -90,6 +95,10 @@ export async function evaluateFlag(
           eq(flags.key, payload.flagKey),
           eq(environments.key, payload.environmentKey),
           eq(flags.projectId, environments.projectId),
+          // When called from the API route, scope to the project that owns the API key
+          payload.projectId
+            ? eq(environments.projectId, payload.projectId)
+            : undefined,
         ),
       )
       .limit(1)

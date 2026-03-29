@@ -103,13 +103,6 @@ export function FlagTargetingRules({
                         percentageValue={rule.percentageValue}
                         segmentOptions={segmentOptions}
                       />
-                      {/*<div className="flex justify-end">
-                        <DeleteFlagRuleButton
-                          ruleId={rule.id}
-                          flagId={flagId}
-                          environmentKey={environmentKey}
-                        />
-                      </div>*/}
                     </div>
                   </div>
                 )

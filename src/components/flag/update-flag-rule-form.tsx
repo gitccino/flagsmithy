@@ -72,7 +72,7 @@ export function UpdateFlagRuleForm({
     })
   }
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (event: React.SubmitEvent<HTMLFormElement>) => {
     event.preventDefault()
     handleUpdateRule(new FormData(event.currentTarget))
   }

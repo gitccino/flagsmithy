@@ -24,7 +24,7 @@ export function UpdateSegmentForm({
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (event: React.SubmitEvent<HTMLFormElement>) => {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
     startTransition(async () => {
@@ -68,7 +68,7 @@ export function UpdateSegmentForm({
           Save Segment
         </Button>
         <Button variant="link" asChild>
-          <Link href="/segments">Back to Segments</Link>
+          <Link href="/segments">Cancel</Link>
         </Button>
       </div>
     </form>

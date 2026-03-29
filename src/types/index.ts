@@ -1,3 +1,4 @@
+import { auth } from '@/lib/auth'
 import {
   environments,
   flagEnvironmentRules,

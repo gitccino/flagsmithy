@@ -55,7 +55,7 @@ export function CreateFlagRuleForm({
     })
   }
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (event: React.SubmitEvent<HTMLFormElement>) => {
     event.preventDefault()
     handleCreateRule(new FormData(event.currentTarget))
   }

@@ -32,7 +32,7 @@ export default function EditFlagForm({ flag }: EditFlagFormProps) {
   const [strategyType, setStrategyType] = useState(strategy.type)
   const strategyValue = strategy.type === 'percentage' ? strategy.value : 0
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (event: React.SubmitEvent<HTMLFormElement>) => {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
     startTransition(async () => {

@@ -42,7 +42,7 @@ export default function FlagToggle({
       disabled={isPending}
       role="switch"
       aria-checked={initialValue}
-      className={`relative inline-flex h-6 w-10 bg-flag-card-background-lv3 rounded-full items-center ${initialValue ? 'bg-green-100' : ''} ${isPending ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+      className={`relative inline-flex h-6 w-10 bg-flag-card-background-lv3 rounded-full items-center ${initialValue ? 'bg-success' : ''} ${isPending ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
     >
       <span
         className={`inline-block h-4 w-4 transform rounded-full bg-flag-card-background-lv2 transition-transform ${

@@ -13,7 +13,7 @@ export function CreateSegmentForm() {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (event: React.SubmitEvent<HTMLFormElement>) => {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
     startTransition(async () => {
